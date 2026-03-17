@@ -11,3 +11,4 @@ export { NetworkMonitorService } from './network-monitor.service';
 export { WinBoxService } from './winbox.service';
 export { DevToolsService } from './devtools.service';
 export { CommunicationService } from './communication.service';
+export { GlobalErrorService } from './global-error.service';

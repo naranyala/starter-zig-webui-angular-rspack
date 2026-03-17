@@ -1,5 +1,5 @@
 // DevTools service for connecting to backend devtools API
-import { Injectable, signal, computed } from '@angular/core';
+import { Injectable, signal, computed, inject } from '@angular/core';
 import { ApiService } from '../core/api.service';
 
 export interface DevToolsStats {
@@ -120,7 +120,7 @@ export class DevToolsService {
     this.setState({ loading: true, error: null });
 
     try {
-      const stats = await this.api.call<DevToolsStats>('devtools.getStats');
+      const stats = await this.api.callOrThrow<DevToolsStats>('devtools.getStats');
       this.stats.set(stats);
       this.setState({ loading: false, lastRefresh: Date.now() });
       return stats;
@@ -136,7 +136,7 @@ export class DevToolsService {
    */
   async getLogs(): Promise<LogEntry[]> {
     try {
-      const logs = await this.api.call<LogEntry[]>('devtools.getLogs');
+      const logs = await this.api.callOrThrow<LogEntry[]>('devtools.getLogs');
       this.logs.set(logs);
       return logs;
     } catch (error) {
@@ -150,7 +150,7 @@ export class DevToolsService {
    */
   async getErrors(): Promise<ErrorReport[]> {
     try {
-      const errors = await this.api.call<ErrorReport[]>('devtools.getErrors');
+      const errors = await this.api.callOrThrow<ErrorReport[]>('devtools.getErrors');
       this.errors.set(errors);
       return errors;
     } catch (error) {
@@ -164,7 +164,7 @@ export class DevToolsService {
    */
   async getMetrics(): Promise<PerformanceMetric[]> {
     try {
-      const metrics = await this.api.call<PerformanceMetric[]>('devtools.getMetrics');
+      const metrics = await this.api.callOrThrow<PerformanceMetric[]>('devtools.getMetrics');
       this.metrics.set(metrics);
       return metrics;
     } catch (error) {
@@ -178,7 +178,7 @@ export class DevToolsService {
    */
   async getUptime(): Promise<number> {
     try {
-      const response = await this.api.call<{ uptime: number }>('devtools.getUptime');
+      const response = await this.api.callOrThrow<{ uptime: number }>('devtools.getUptime');
       return response.uptime;
     } catch (error) {
       console.error('Failed to get uptime:', error);

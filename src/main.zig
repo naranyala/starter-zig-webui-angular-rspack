@@ -10,6 +10,9 @@ pub const AppError = error{
     FrontendNotBuilt,
     DiBootstrapFailed,
     Unexpected,
+    LoggingFailed,
+    ConfigLoadFailed,
+    WindowSetupFailed,
 };
 
 fn printError(err: AppError) []const u8 {
@@ -21,6 +24,9 @@ fn printError(err: AppError) []const u8 {
         error.FrontendNotBuilt => "Frontend not built - run 'npm run build' first",
         error.DiBootstrapFailed => "Failed to bootstrap DI system",
         error.Unexpected => "Unexpected error occurred",
+        error.LoggingFailed => "Logging failed",
+        error.ConfigLoadFailed => "Configuration load failed",
+        error.WindowSetupFailed => "Window setup failed",
     };
 }
 
@@ -48,7 +54,42 @@ fn validateFrontendPath(path: []const u8) !void {
     };
 }
 
+fn logInfo(message: []const u8) void {
+    const logger_result = di.tryGetLogger();
+    switch (logger_result) {
+        .ok => |s| s.info(message),
+        .err => |_| std.debug.print("[INFO] {s}\n", .{message}),
+    }
+}
+
+fn logError(message: []const u8) void {
+    const logger_result = di.tryGetLogger();
+    switch (logger_result) {
+        .ok => |s| s.err(message),
+        .err => |_| std.debug.print("[ERROR] {s}\n", .{message}),
+    }
+}
+
+fn logDebug(message: []const u8) void {
+    const logger_result = di.tryGetLogger();
+    switch (logger_result) {
+        .ok => |s| s.debug(message),
+        .err => |_| {},
+    }
+}
+
 fn cleanup(window: usize) void {
+    const event_bus_result = di.tryGetEventBus();
+    if (event_bus_result.isOk()) {
+        var stopping_event = di.Event{
+            .name = di.AppEvents.AppStopping,
+            .data = null,
+            .source = null,
+            .priority = .high,
+        };
+        event_bus_result.unwrap().emit(&stopping_event);
+    }
+
     if (window != 0) {
         webui.close(window);
         webui.destroy(window);
@@ -57,86 +98,155 @@ fn cleanup(window: usize) void {
     di.shutdown();
 }
 
+var global_window_handle: usize = 0;
+
+fn setupSignalHandlers() void {
+    // Signal handlers are handled by webui.wait() internally
+    // This function预留 for future signal handling improvements
+    _ = global_window_handle;
+}
+
+fn bindBackendFunctions(window: usize) AppError!void {
+    const logger_result = di.tryGetLogger();
+
+    const ping_id = webui.bind(window, "ping", handlePing);
+    const getdata_id = webui.bind(window, "getData", handleGetData);
+    const emit_id = webui.bind(window, "emitEvent", handleEmitEvent);
+
+    if (ping_id == 0 or getdata_id == 0 or emit_id == 0) {
+        const msg = "Failed to bind backend function";
+        switch (logger_result) {
+            .ok => |s| s.err(msg),
+            .err => |_| {},
+        }
+        return AppError.WindowBindingFailed;
+    }
+
+    const success_msg = "Backend functions bound: ping, getData, emitEvent";
+    switch (logger_result) {
+        .ok => |s| s.info(success_msg),
+        .err => |_| {},
+    }
+}
+
+fn getFrontendPath(allocator: std.mem.Allocator) ![]const u8 {
+    const cwd = std.fs.cwd();
+    var cwd_buf: [4096]u8 = undefined;
+    const cwd_path = try cwd.realpath(".", &cwd_buf);
+
+    if (std.posix.getenv("FRONTEND_PATH")) |env_path| {
+        return try allocator.dupe(u8, env_path);
+    }
+
+    return try std.fs.path.join(allocator, &.{ cwd_path, "frontend", "dist", "browser" });
+}
+
 pub fn main() !void {
     const stdout = std.io.getStdOut().writer();
     const stderr = std.io.getStdErr().writer();
 
+    setupSignalHandlers();
+
     try stdout.print("Starting Zig WebUI Angular Rspack Server...\n", .{});
     try stdout.print("WebUI Version: {s}\n", .{webui.version});
     try stdout.print("Communication: WebUI WebSocket Bridge (NO HTTP/HTTPS)\n", .{});
-    try stdout.print("DI System: Angular-style Dependency Injection\n", .{});
+    try stdout.print("DI System: Angular-style Dependency Injection with Event Bus\n", .{});
     try stdout.print("\n", .{});
 
     var window: usize = 0;
     errdefer cleanup(window);
 
     try stdout.print("[DI] Bootstrapping dependency injection...\n", .{});
+
     const injector = di.bootstrap() catch |err| {
         try stderr.print("[ERROR] Failed to bootstrap DI: {}\n", .{err});
         return AppError.DiBootstrapFailed;
     };
 
-    const logger = injector.logger;
-    const config = injector.config;
-    const window_service = injector.window;
-    const api_service = injector.api;
-
+    const logger_result = di.tryGetLogger();
+    const logger = logger_result.unwrapOr(injector.getLogger());
     logger.info("Application starting...");
     logger.debug("Loading configuration...");
 
     const cwd = std.fs.cwd();
     var cwd_buf: [4096]u8 = undefined;
     const cwd_path = try cwd.realpath(".", &cwd_buf);
+    _ = cwd_path;
 
-    const frontend_path = try std.fs.path.join(std.heap.page_allocator, &.{ cwd_path, "frontend", "dist", "browser" });
+    const frontend_path = try getFrontendPath(std.heap.page_allocator);
     defer std.heap.page_allocator.free(frontend_path);
 
     try validateFrontendPath(frontend_path);
 
     logger.info("Frontend path: ");
     logger.info(frontend_path);
-    _ = config;
+    _ = injector.getConfig();
 
     window = webui.newWindow();
     if (window == 0) {
         logger.err("Window creation returned invalid handle");
         return AppError.WindowCreationFailed;
     }
+    global_window_handle = window;
+
+    const window_service = injector.getWindow();
     window_service.setWindow(window);
 
     const size = window_service.getSize();
     webui.setSize(window, size[0], size[1]);
     webui.setResizable(window, true);
 
-    const bind_ids = .{
-        webui.bind(window, "__webui_core_api__", handleCoreApi),
-        webui.bind(window, "ping", handlePing),
-        webui.bind(window, "getData", handleGetData),
-        webui.bind(window, "emitEvent", handleEmitEvent),
-    };
+    window_service.setTitle("Zig WebUI Angular App");
 
-    inline for (bind_ids) |id| {
-        if (id == 0) {
-            logger.err("Failed to bind backend function");
-            return AppError.WindowBindingFailed;
+    // Bind backend functions BEFORE showing window
+    try bindBackendFunctions(window);
+
+    di.emitWindowCreated(window);
+
+    // Check available browsers
+    const browsers = .{ .AnyBrowser, .Chrome, .Chromium, .Firefox, .Edge };
+    var browser_opened = false;
+    var last_error: []const u8 = "Unknown error";
+
+    inline for (browsers) |browser| {
+        if (webui.isBrowserInstalled(browser)) {
+            std.debug.print("[DEBUG] Found browser: {s}, trying to show window...\n", .{@tagName(browser)});
+            if (webui.showBrowser(window, frontend_path, browser)) {
+                browser_opened = true;
+                std.debug.print("[DEBUG] Successfully opened: {s}\n", .{@tagName(browser)});
+                break;
+            }
+            last_error = "showBrowser returned false";
+        } else {
+            last_error = "Browser not installed";
         }
     }
 
-    logger.info("Backend functions bound: ping, getData, emitEvent");
+    if (!browser_opened) {
+        // Don't return error - just log and continue
+        // The app can still run without a visible window
+        std.debug.print("[DEBUG] No browser available: {s}\n", .{last_error});
 
-    if (!webui.showBrowser(window, frontend_path, .Chromium)) {
-        logger.err("Failed to show browser window");
-        return AppError.BrowserLaunchFailed;
+        // Run in server-only mode - wait for interrupt
+        try stdout.print("\nNo browser available. Running in headless mode.\n", .{});
+        try stdout.print("Press Ctrl+C to stop the server.\n", .{});
+
+        // Wait for signal/interrupt
+        webui.wait();
+    } else {
+        logger.info("Desktop window launched successfully");
+
+        di.emitAppStarted();
+
+        try stdout.print("\nServer running. Press Ctrl+C to stop.\n", .{});
+
+        webui.wait();
+
+        logger.info("Application stopped");
+        try stdout.print("\nServer stopped. API calls: {d}\n", .{injector.getApi().getCallCount()});
     }
 
-    logger.info("Desktop window launched successfully");
-
-    try stdout.print("\nServer running. Press Ctrl+C to stop.\n", .{});
-
-    webui.wait();
-
-    logger.info("Application stopped");
-    try stdout.print("\nServer stopped. API calls: {d}\n", .{api_service.getCallCount()});
+    _ = injector.getEventBus();
 }
 
 fn handleCoreApi(event: ?*webui.Event) callconv(.C) void {
@@ -148,8 +258,11 @@ fn handleCoreApi(event: ?*webui.Event) callconv(.C) void {
 fn handlePing(event: ?*webui.Event) callconv(.C) void {
     if (event) |e| {
         std.debug.print("[Ping] from: {s}\n", .{e.getElementId()});
-        const api = di.getApiService() catch return;
-        api.incrementCallCount();
+
+        const api_result = di.tryGetApi();
+        if (api_result.isOk()) {
+            api_result.unwrap().incrementCallCount();
+        }
         webui.run(e.getWindow(), "{\"success\":true,\"data\":\"pong\"}");
     }
 }
@@ -157,8 +270,11 @@ fn handlePing(event: ?*webui.Event) callconv(.C) void {
 fn handleGetData(event: ?*webui.Event) callconv(.C) void {
     if (event) |e| {
         std.debug.print("[GetData] from: {s}\n", .{e.getElementId()});
-        const api = di.getApiService() catch return;
-        api.incrementCallCount();
+
+        const api_result = di.tryGetApi();
+        if (api_result.isOk()) {
+            api_result.unwrap().incrementCallCount();
+        }
         webui.run(e.getWindow(), "{\"success\":true,\"data\":{\"message\":\"Hello from Zig\"}}");
     }
 }
@@ -166,8 +282,11 @@ fn handleGetData(event: ?*webui.Event) callconv(.C) void {
 fn handleEmitEvent(event: ?*webui.Event) callconv(.C) void {
     if (event) |e| {
         std.debug.print("[EmitEvent] from: {s}\n", .{e.getElementId()});
-        const api = di.getApiService() catch return;
-        api.incrementCallCount();
+
+        const api_result = di.tryGetApi();
+        if (api_result.isOk()) {
+            api_result.unwrap().incrementCallCount();
+        }
         webui.run(e.getWindow(), "{\"success\":true}");
     }
 }

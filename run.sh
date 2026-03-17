@@ -141,7 +141,7 @@ step_build_frontend() {
     log_step "Installing frontend dependencies..."
     bun install --frozen-lockfile
 
-    log_step "Building Angular app with Rspack..."
+    log_step "Building Angular app..."
 
     # Set build type
     if [ "$BUILD_TYPE" = "debug" ]; then
@@ -152,8 +152,8 @@ step_build_frontend() {
         log_info "Building in RELEASE mode (optimized)"
     fi
 
-    # Build with Rspack
-    bun run build:rspack
+    # Build with Angular CLI (uses esbuild under the hood)
+    bun run build
 
     # Verify build output
     if [ -d "${FRONTEND_DIR}/dist/browser" ]; then

@@ -121,7 +121,7 @@ pub const Clipboard = struct {
     };
 
     pub fn init(allocator: mem.Allocator) ClipboardError!Clipboard {
-        const platform_impl = switch (builtin.os.tag) {
+        const platform_impl = switch (@import("std").builtin.os.tag) {
             .linux => PlatformClipboard{
                 .linux = LinuxClipboard.init() catch return ClipboardError.Unavailable,
             },
@@ -263,10 +263,9 @@ const LinuxClipboard = struct {
         // Write to stdin
         // Note: This is a simplified implementation
         // A full implementation would handle the X11 selection protocol
-        _ = text;
     }
 
-    fn setTextXsel(self: *LinuxClipboard, text: []const u8) ClipboardError!void {
+    fn setTextXsel(_: *LinuxClipboard, text: []const u8) ClipboardError!void {
         const result = std.process.Child.run(.{
             .allocator = std.heap.page_allocator,
             .argv = &.{ "xsel", "--clipboard", "--input" },
@@ -298,7 +297,7 @@ const LinuxClipboard = struct {
         return result.stdout;
     }
 
-    fn getTextXsel(self: *LinuxClipboard, allocator: mem.Allocator) ClipboardError![]const u8 {
+    fn getTextXsel(_: *LinuxClipboard, allocator: mem.Allocator) ClipboardError![]const u8 {
         const result = std.process.Child.run(.{
             .allocator = allocator,
             .argv = &.{ "xsel", "--clipboard", "--output" },
@@ -325,7 +324,7 @@ const LinuxClipboard = struct {
         return result.stdout.len > 0;
     }
 
-    fn hasTextXsel(self: *LinuxClipboard) ClipboardError!bool {
+    fn hasTextXsel(_: *LinuxClipboard) ClipboardError!bool {
         const result = std.process.Child.run(.{
             .allocator = std.heap.page_allocator,
             .argv = &.{ "xsel", "--clipboard" },
@@ -335,7 +334,7 @@ const LinuxClipboard = struct {
         return result.stdout.len > 0;
     }
 
-    fn clear(self: *LinuxClipboard) ClipboardError!void {
+    fn clear(_: *LinuxClipboard) ClipboardError!void {
         _ = std.process.Child.run(.{
             .allocator = std.heap.page_allocator,
             .argv = &.{ "xclip", "-selection", "clipboard", "-i", "/dev/null" },
@@ -345,18 +344,18 @@ const LinuxClipboard = struct {
         };
     }
 
-    fn setHtml(self: *LinuxClipboard, html: HtmlContent) ClipboardError!void {
+    fn setHtml(_: *LinuxClipboard, html: HtmlContent) ClipboardError!void {
         // Set HTML content using text/html MIME type
         _ = html;
         // Full implementation would use xclip with -t text/html
     }
 
-    fn getHtml(self: *LinuxClipboard, allocator: mem.Allocator) ClipboardError!HtmlContent {
+    fn getHtml(_: *LinuxClipboard, allocator: mem.Allocator) ClipboardError!HtmlContent {
         _ = allocator;
         return ClipboardError.Unavailable;
     }
 
-    fn hasHtml(self: *LinuxClipboard) ClipboardError!bool {
+    fn hasHtml(_: *LinuxClipboard) ClipboardError!bool {
         // Check if text/html is available in clipboard
         return false;
     }
@@ -383,7 +382,7 @@ const WindowsClipboard = struct {
         // Uses OpenClipboard, EmptyClipboard, SetClipboardData
     }
 
-    fn getText(self: *WindowsClipboard, allocator: mem.Allocator) ClipboardError![]const u8 {
+    fn getText(_: *WindowsClipboard, allocator: mem.Allocator) ClipboardError![]const u8 {
         _ = allocator;
         // Windows API implementation would go here
         // Uses OpenClipboard, GetClipboardData
@@ -407,7 +406,7 @@ const WindowsClipboard = struct {
         // Windows uses CF_HTML format
     }
 
-    fn getHtml(self: *WindowsClipboard, allocator: mem.Allocator) ClipboardError!HtmlContent {
+    fn getHtml(_: *WindowsClipboard, allocator: mem.Allocator) ClipboardError!HtmlContent {
         _ = allocator;
         return ClipboardError.Unavailable;
     }
@@ -440,11 +439,11 @@ const MacosClipboard = struct {
         // Could also use 'pbcopy' command
     }
 
-    fn getText(self: *MacosClipboard, allocator: mem.Allocator) ClipboardError![]const u8 {
+    fn getText(_: *MacosClipboard, allocator: mem.Allocator) ClipboardError![]const u8 {
         // Use pbcopy/pbpaste for simplicity
         const result = std.process.Child.run(.{
             .allocator = allocator,
-            .argv = &.{ "pbpaste" },
+            .argv = &.{"pbpaste"},
             .stdout_behavior = .Pipe,
         }) catch return ClipboardError.Unavailable;
 
@@ -455,17 +454,17 @@ const MacosClipboard = struct {
         return result.stdout;
     }
 
-    fn hasText(self: *MacosClipboard) ClipboardError!bool {
+    fn hasText(_: *MacosClipboard) ClipboardError!bool {
         const result = std.process.Child.run(.{
             .allocator = std.heap.page_allocator,
-            .argv = &.{ "pbpaste" },
+            .argv = &.{"pbpaste"},
             .stdout_behavior = .Pipe,
         }) catch return false;
 
         return result.stdout.len > 0;
     }
 
-    fn clear(self: *MacosClipboard) ClipboardError!void {
+    fn clear(_: *MacosClipboard) ClipboardError!void {
         _ = std.process.Child.run(.{
             .allocator = std.heap.page_allocator,
             .argv = &.{ "osascript", "-e", "tell application \"System Events\" to keystroke \"w\" using command down" },
@@ -481,7 +480,7 @@ const MacosClipboard = struct {
         // macOS uses NSPasteboardTypeHTML
     }
 
-    fn getHtml(self: *MacosClipboard, allocator: mem.Allocator) ClipboardError!HtmlContent {
+    fn getHtml(_: *MacosClipboard, allocator: mem.Allocator) ClipboardError!HtmlContent {
         _ = allocator;
         return ClipboardError.Unavailable;
     }
@@ -534,11 +533,11 @@ test "Clipboard - Copy and paste text" {
 
     const test_text = "Hello, Clipboard!";
     try clipboard.setText(test_text);
-    
+
     // Note: This may fail in headless environments
     const text = try clipboard.getText();
     defer testing.allocator.free(text);
-    
+
     try testing.expectEqualStrings(test_text, text);
 }
 

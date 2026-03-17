@@ -122,7 +122,7 @@ pub const NotificationManager = struct {
     };
 
     pub fn init(allocator: mem.Allocator) NotificationError!NotificationManager {
-        const platform_impl = switch (builtin.os.tag) {
+        const platform_impl = switch (@import("std").builtin.os.tag) {
             .linux => PlatformNotification{
                 .linux = LinuxNotification.init() catch return NotificationError.Unavailable,
             },
@@ -275,7 +275,7 @@ const LinuxNotification = struct {
         _ = self;
     }
 
-    fn send(self: *LinuxNotification, notification: *Notification) NotificationError!u32 {
+    fn send(_: *LinuxNotification, notification: *Notification) NotificationError!u32 {
         // Use notify-send command
         var args = std.ArrayList([]const u8).init(std.heap.page_allocator);
         defer args.deinit();
@@ -326,7 +326,7 @@ const LinuxNotification = struct {
         return @intCast(time.timestamp());
     }
 
-    fn close(self: *LinuxNotification, id: u32) NotificationError!void {
+    fn close(_: *LinuxNotification, id: u32) NotificationError!void {
         _ = id;
         // notify-send doesn't support closing notifications
         // Would need D-Bus for this
@@ -368,7 +368,7 @@ const WindowsNotification = struct {
         _ = self;
     }
 
-    fn send(self: *WindowsNotification, notification: *Notification) NotificationError!u32 {
+    fn send(_: *WindowsNotification, notification: *Notification) NotificationError!u32 {
         _ = notification;
         // Windows Toast Notification API implementation
         // Would use Windows.UI.Notifications namespace
@@ -388,7 +388,7 @@ const WindowsNotification = struct {
         return @intCast(time.timestamp());
     }
 
-    fn close(self: *WindowsNotification, id: u32) NotificationError!void {
+    fn close(_: *WindowsNotification, id: u32) NotificationError!void {
         _ = id;
         // Windows Toast API would be needed
     }
@@ -422,9 +422,7 @@ const MacosNotification = struct {
         _ = self;
     }
 
-    fn send(self: *MacosNotification, notification: *Notification) NotificationError!u32 {
-        _ = self;
-        _ = notification;
+    fn send(_: *MacosNotification, notification: *Notification) NotificationError!u32 {
         // macOS UserNotifications framework implementation
         // Would use UNUserNotificationCenter
         // For now, use osascript as fallback
@@ -451,7 +449,7 @@ const MacosNotification = struct {
         return @intCast(time.timestamp());
     }
 
-    fn close(self: *MacosNotification, id: u32) NotificationError!void {
+    fn close(_: *MacosNotification, id: u32) NotificationError!void {
         _ = id;
         // macOS doesn't support programmatically dismissing notifications
     }

@@ -21,7 +21,7 @@
  * ws.onEvent('updates', (data) => console.log(data));
  */
 
-import { Injectable, signal, computed } from '@angular/core';
+import { Injectable, signal } from '@angular/core';
 
 export interface WebSocketMessage {
   type: 'request' | 'response' | 'event' | 'subscribe' | 'unsubscribe' | 'ping' | 'pong';
@@ -104,10 +104,12 @@ export class WebSocketService {
 
       this.ws.onopen = () => this.onOpen();
       this.ws.onclose = (event) => this.onClose(event);
-      this.ws.onerror = () => this.onError();
+      this.ws.onerror = (err) => this.onError(err);
       this.ws.onmessage = (event) => this.onMessage(event);
     } catch (err) {
-      this.onError(err instanceof Error ? err.message : 'Connection failed');
+      const msg = err instanceof Error ? err.message : 'Connection failed';
+      this.onError();
+      this.error.set(msg);
     }
   }
 
@@ -128,8 +130,8 @@ export class WebSocketService {
   }
 
   /**
-   * Send request and wait for response
-   */
+    * Send request and wait for response
+    */
   async request<T>(method: string, params?: unknown, timeoutMs = 30000): Promise<T> {
     return new Promise((resolve, reject) => {
       const id = ++this.messageId;
@@ -139,7 +141,7 @@ export class WebSocketService {
         reject(new Error(`Request timeout: ${method}`));
       }, timeoutMs);
 
-      this.pendingRequests.set(id, { resolve, reject, timeout });
+      this.pendingRequests.set(id, { resolve: resolve as (data: unknown) => void, reject, timeout });
 
       this.send({
         type: 'request',
@@ -256,15 +258,15 @@ export class WebSocketService {
     this.pendingRequests.clear();
 
     // Attempt reconnect
-    if (this.reconnectAttempts.get() < (this.config.maxReconnectAttempts ?? 5)) {
+    if (this.reconnectAttempts() < (this.config.maxReconnectAttempts ?? 5)) {
       this.scheduleReconnect();
     }
   }
 
-  private onError(): void {
+  private onError(err?: Event): void {
     this.error.set('Connection error');
     this.updateStats({ errors: 1 });
-    console.error('[WebSocket] Error');
+    console.error('[WebSocket] Error', err);
   }
 
   private onMessage(event: MessageEvent): void {
@@ -345,7 +347,7 @@ export class WebSocketService {
   private scheduleReconnect(): void {
     this.clearReconnect();
     
-    const attempts = this.reconnectAttempts.get();
+    const attempts = this.reconnectAttempts();
     const delay = this.config.reconnectInterval ?? 3000;
     
     this.reconnectTimer = window.setTimeout(() => {

@@ -19,6 +19,16 @@ export interface LogStats {
   error: number;
 }
 
+export function createLogger(source?: string): Pick<LoggerService, 'debug' | 'info' | 'warn' | 'error'> {
+  const logger = new LoggerService();
+  return {
+    debug: (msg: string, data?: unknown) => logger.debug(msg, data, source),
+    info: (msg: string, data?: unknown) => logger.info(msg, data, source),
+    warn: (msg: string, data?: unknown) => logger.warn(msg, data, source),
+    error: (msg: string, data?: unknown) => logger.error(msg, data, source),
+  };
+}
+
 @Injectable({ providedIn: 'root' })
 export class LoggerService {
   private readonly minLevel: LogLevel = 'info';

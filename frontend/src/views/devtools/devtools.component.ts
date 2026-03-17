@@ -1,9 +1,9 @@
 // src/views/devtools/devtools.component.ts
 // DevTools panel for debugging with backend integration
 
-import { Component, signal, inject, OnInit } from '@angular/core';
+import { Component, signal, inject, OnInit, computed } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { DevToolsService, type LogEntry, type ErrorReport } from '../../core/devtools.service';
+import { DevToolsService } from '../../core/devtools.service';
 
 @Component({
   selector: 'app-devtools',
@@ -579,11 +579,11 @@ import { DevToolsService, type LogEntry, type ErrorReport } from '../../core/dev
   `],
 })
 export class DevtoolsComponent implements OnInit {
-  private readonly devToolsService = inject(DevToolsService);
+  readonly devToolsService = inject(DevToolsService);
 
   activeTab = signal<'stats' | 'logs' | 'errors' | 'metrics' | 'actions'>('stats');
 
-  tabs = [
+  readonly tabs: { id: 'stats' | 'logs' | 'errors' | 'metrics' | 'actions'; label: string; icon: string }[] = [
     { id: 'stats', label: 'Statistics', icon: '📊' },
     { id: 'logs', label: 'Logs', icon: '📝' },
     { id: 'errors', label: 'Errors', icon: '⚠' },

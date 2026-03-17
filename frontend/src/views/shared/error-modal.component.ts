@@ -1,7 +1,6 @@
 import { CommonModule } from '@angular/common';
 import { Component, EventEmitter, Input, Output } from '@angular/core';
 import type { RootErrorState } from '../../core/global-error.service';
-import { ErrorCode } from '../../types';
 
 @Component({
   selector: 'app-error-modal',
@@ -384,32 +383,32 @@ export class ErrorModalComponent {
   @Input() error: RootErrorState | null = null;
   @Output() dismissed = new EventEmitter<void>();
 
-  getErrorIcon(code: ErrorCode): string {
+  getErrorIcon(code: string): string {
     switch (code) {
-      case ErrorCode.ValidationFailed:
+      case 'VALIDATION_FAILED':
         return '!';
-      case ErrorCode.ResourceNotFound:
-      case ErrorCode.UserNotFound:
-      case ErrorCode.EntityNotFound:
+      case 'RESOURCE_NOT_FOUND':
+      case 'USER_NOT_FOUND':
+      case 'ENTITY_NOT_FOUND':
         return '?';
-      case ErrorCode.DbAlreadyExists:
+      case 'DB_ALREADY_EXISTS':
         return 'DB';
-      case ErrorCode.DbConnectionFailed:
-      case ErrorCode.DbQueryFailed:
-      case ErrorCode.DbConstraintViolation:
+      case 'DB_CONNECTION_FAILED':
+      case 'DB_QUERY_FAILED':
+      case 'DB_CONSTRAINT_VIOLATION':
         return 'DB';
-      case ErrorCode.ConfigNotFound:
-      case ErrorCode.ConfigInvalid:
-      case ErrorCode.ConfigMissingField:
+      case 'CONFIG_NOT_FOUND':
+      case 'CONFIG_INVALID':
+      case 'CONFIG_MISSING_FIELD':
         return 'CFG';
-      case ErrorCode.SerializationFailed:
-      case ErrorCode.DeserializationFailed:
-      case ErrorCode.InvalidFormat:
+      case 'SERIALIZATION_FAILED':
+      case 'DESERIALIZATION_FAILED':
+      case 'INVALID_FORMAT':
         return 'ERR';
-      case ErrorCode.InternalError:
-      case ErrorCode.LockPoisoned:
+      case 'INTERNAL_ERROR':
+      case 'LOCK_POISONED':
         return 'ERR';
-      case ErrorCode.Unknown:
+      case 'UNKNOWN':
         return '?';
       default:
         return 'X';

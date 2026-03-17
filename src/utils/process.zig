@@ -187,19 +187,19 @@ pub const Process = struct {
         return switch (result.status) {
             .Exited => |code| {
                 log.debug("Process {d} exited with code: {d}", .{ self.pid, code });
-                .{ .Exited = @intCast(code) }
+                return .{ .Exited = @intCast(code) };
             },
             .Stopped => |code| {
                 log.debug("Process {d} stopped with code: {d}", .{ self.pid, code });
-                .{ .Stopped = @intCast(code) }
+                return .{ .Stopped = @intCast(code) };
             },
             .Signal => |code| {
                 log.debug("Process {d} killed by signal: {d}", .{ self.pid, code });
-                .{ .Signal = @intCast(code) }
+                return .{ .Signal = @intCast(code) };
             },
             else => {
                 log.warn("Process {d} terminated with unknown status", .{self.pid});
-                .Unknown
+                return .Unknown;
             },
         };
     }
@@ -309,7 +309,7 @@ pub const ProcessManager = struct {
     }
 
     pub fn spawn(self: *Self, argv: []const []const u8, config: ProcessConfig) ProcessError!Process {
-        var process = try Process.spawn(self.allocator, argv, config);
+        const process = try Process.spawn(self.allocator, argv, config);
 
         self.mutex.lock();
         defer self.mutex.unlock();
@@ -359,7 +359,7 @@ pub const ProcessManager = struct {
 
     pub fn waitForAll(self: *Self) void {
         self.mutex.lock();
-        var processes = self.processes.values();
+        const processes = self.processes.values();
         self.mutex.unlock();
 
         for (processes) |process| {
@@ -529,7 +529,7 @@ test "Process - Process result success check" {
 }
 
 test "Process - Process result failure check" {
-    const result = run(testing.allocator, &.{ "/bin/false" }, .{}) catch |err| {
+    const result = run(testing.allocator, &.{"/bin/false"}, .{}) catch |err| {
         if (err == ProcessError.NotFound) return;
         return err;
     };
@@ -542,7 +542,7 @@ test "Process - Process with custom working directory" {
     var manager = ProcessManager.init(testing.allocator);
     defer manager.deinit();
 
-    const process = manager.spawn(&.{ "/bin/pwd" }, .{
+    const process = manager.spawn(&.{"/bin/pwd"}, .{
         .cwd = "/tmp",
         .stdout_behavior = .pipe,
         .stderr_behavior = .ignore,
@@ -550,7 +550,9 @@ test "Process - Process with custom working directory" {
         if (err == ProcessError.NotFound) return;
         return err;
     };
-    defer { _ = process.wait() catch {}; }
+    defer {
+        _ = process.wait() catch {};
+    }
 
     try testing.expect(process.isRunning());
 }
@@ -561,7 +563,7 @@ test "Process - ProcessManager tracks processes" {
 
     try testing.expectEqual(@as(usize, 0), manager.count());
 
-    _ = manager.spawn(&.{ "/bin/true" }, .{}) catch |err| {
+    _ = manager.spawn(&.{"/bin/true"}, .{}) catch |err| {
         if (err == ProcessError.NotFound) return;
         return err;
     };
@@ -603,7 +605,7 @@ test "Process - ProcessManager remove process" {
 }
 
 test "Process - Invalid command returns error" {
-    const result = run(testing.allocator, &.{ "/bin/nonexistent_command_xyz" }, .{});
+    const result = run(testing.allocator, &.{"/bin/nonexistent_command_xyz"}, .{});
     try testing.expectError(ProcessError.NotFound, result);
 }
 

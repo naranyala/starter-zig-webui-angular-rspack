@@ -1,6 +1,6 @@
 // API Service using WebUI Native Bridge - NO HTTP/HTTPS
 // All communication goes through WebUI's WebSocket bridge
-import { Injectable, signal, computed } from '@angular/core';
+import { Injectable, signal, computed, inject } from '@angular/core';
 import { WebuiBridgeService } from './webui-bridge.service';
 
 export interface ApiResponse<T> {
@@ -90,7 +90,7 @@ export class ApiService {
    * Subscribe to backend events via WebUI bridge
    */
   onEvent<T>(event: string, handler: (data: T) => void): () => void {
-    return this.webui.onEvent(event, handler);
+    return this.webui.onEvent(event, handler as (data: unknown) => void);
   }
 
   /**

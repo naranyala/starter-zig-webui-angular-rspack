@@ -253,7 +253,7 @@ pub const SettingsManager = struct {
 
         // Ensure directory exists
         const dir_path = std.fs.path.dirname(self.config_path) orelse ".";
-        try fs.createDir(dir_path);
+        fs.createDir(dir_path) catch {};
 
         // Serialize to JSON
         var buffer = std.ArrayList(u8).init(self.allocator);
@@ -399,12 +399,12 @@ pub const SettingsManager = struct {
     }
 
     pub fn keys(self: *Self) [][]const u8 {
-        var keys = std.ArrayList([]const u8).init(self.allocator);
+        var all_keys = std.ArrayList([]const u8).init(self.allocator);
         var it = self.data.iterator();
         while (it.next()) |entry| {
-            keys.append(entry.key_ptr.*) catch break;
+            all_keys.append(entry.key_ptr.*) catch break;
         }
-        return keys.toOwnedSlice();
+        return all_keys.toOwnedSlice();
     }
 
     pub fn reset(self: *Self) SettingsError!void {

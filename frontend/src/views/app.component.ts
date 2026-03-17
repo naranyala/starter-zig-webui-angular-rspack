@@ -4,9 +4,6 @@ import { WinBoxService, type WinBoxInstance } from '../core/winbox.service';
 import { AuthComponent } from './auth/auth.component';
 import { SqliteCrudComponent } from './sqlite/sqlite.component';
 
-// Import styles with null guards
-const styles: string = (require('./app.component.css?raw') as string) || '';
-
 export interface NavItem {
   id: string;
   label: string;
@@ -48,8 +45,8 @@ const TECH_CARDS: Card[] = [
   selector: 'app-root',
   standalone: true,
   imports: [CommonModule, AuthComponent, SqliteCrudComponent],
-  template: require('./app.component.html?raw') as string,
-  styles: [styles],
+  templateUrl: './app.component.html',
+  styleUrls: ['./app.component.css'],
 })
 export class AppComponent {
   private readonly winboxService = inject(WinBoxService);

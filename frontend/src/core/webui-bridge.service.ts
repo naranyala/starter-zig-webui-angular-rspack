@@ -1,6 +1,6 @@
 // WebUI Native Bridge Service
 // Direct function binding via WebUI WebSocket bridge - NO HTTP/HTTPS
-import { Injectable, signal, computed, effect } from '@angular/core';
+import { Injectable, signal, computed } from '@angular/core';
 
 export interface WebUIConnectionState {
   connected: boolean;
@@ -110,7 +110,7 @@ export class WebuiBridgeService {
 
       // Call backend function via WebUI bridge
       try {
-        const backendFn = (window as Record<string, unknown>)[functionName];
+        const backendFn = (window as unknown as Record<string, unknown>)[functionName];
         
         if (typeof backendFn !== 'function') {
           clearTimeout(timeoutId);
@@ -168,9 +168,11 @@ export class WebuiBridgeService {
    * Emit event to backend (via WebSocket)
    */
   async emit(event: string, data: unknown): Promise<void> {
-    return this.call('emitEvent', [event, data]).catch(() => {
+    try {
+      await this.call('emitEvent', [event, data]);
+    } catch {
       // Silently fail if backend doesn't have emitEvent bound
-    });
+    }
   }
 
   /**
@@ -203,7 +205,7 @@ export class WebuiBridgeService {
       const state = this.connectionState();
       
       // Check if WebUI bridge is available
-      const hasWebUI = typeof (window as Record<string, unknown>).webui !== 'undefined';
+      const hasWebUI = typeof (window as unknown as Record<string, unknown>).webui !== 'undefined';
       
       if (hasWebUI) {
         this.connectionState.set({
@@ -226,22 +228,25 @@ export class WebuiBridgeService {
 
   private setupEventListeners(): void {
     // Listen for backend events dispatched by WebUI bridge
-    window.addEventListener('backend-event', (event: CustomEvent) => {
-      const { event: eventName, data } = event.detail;
+    window.addEventListener('backend-event', ((event: Event) => {
+      const customEvent = event as CustomEvent<{ event: string; data: unknown }>;
+      const { event: eventName, data } = customEvent.detail;
       this.handleEvent(eventName, data);
-    });
+    }) as EventListener);
 
     // Listen for state updates from backend
-    window.addEventListener('state-update', (event: CustomEvent) => {
-      const { key, value } = event.detail;
+    window.addEventListener('state-update', ((event: Event) => {
+      const customEvent = event as CustomEvent<{ key: string; value: unknown }>;
+      const { key, value } = customEvent.detail;
       this.handleEvent('state-update', { key, value });
-    });
+    }) as EventListener);
 
     // Listen for broadcast messages
-    window.addEventListener('broadcast-message', (event: CustomEvent) => {
-      const { event: eventName, data } = event.detail;
+    window.addEventListener('broadcast-message', ((event: Event) => {
+      const customEvent = event as CustomEvent<{ event: string; data: unknown }>;
+      const { event: eventName, data } = customEvent.detail;
       this.handleEvent('broadcast', { event: eventName, data });
-    });
+    }) as EventListener);
   }
 
   private handleEvent(event: string, data: unknown): void {
