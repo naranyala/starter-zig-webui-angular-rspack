@@ -321,3 +321,82 @@ test "Message parsing" {
     try testing.expectEqual(@as(u32, 1), message.value.id.?);
     try testing.expectEqualStrings("getData", message.value.method.?);
 }
+
+test "WebSocket Server - Client multiple subscriptions" {
+    var client = Client.init(1, undefined, undefined, testing.allocator);
+    defer client.deinit();
+
+    try client.subscribe("topic1");
+    try client.subscribe("topic2");
+    try client.subscribe("topic3");
+
+    try testing.expect(client.isSubscribed("topic1"));
+    try testing.expect(client.isSubscribed("topic2"));
+    try testing.expect(client.isSubscribed("topic3"));
+    try testing.expectEqual(@as(usize, 3), client.topics.count());
+}
+
+test "WebSocket Server - Client unsubscribe all" {
+    var client = Client.init(1, undefined, undefined, testing.allocator);
+    defer client.deinit();
+
+    try client.subscribe("topic1");
+    try client.subscribe("topic2");
+
+    client.unsubscribeAll();
+    try testing.expectEqual(@as(usize, 0), client.topics.count());
+}
+
+test "WebSocket Server - Message types" {
+    // Test request message
+    const request_data = \\{"type":"request","id":1,"method":"test","params":{}}
+    ;
+    var req_msg = try json.parseFromSlice(Message, testing.allocator, request_data, .{});
+    defer req_msg.deinit();
+    try testing.expect(req_msg.value.type == .request);
+
+    // Test response message  
+    const response_data = \\{"type":"response","id":1,"result":"success"}
+    ;
+    var resp_msg = try json.parseFromSlice(Message, testing.allocator, response_data, .{});
+    defer resp_msg.deinit();
+    try testing.expect(resp_msg.value.type == .response);
+
+    // Test event message
+    const event_data = \\{"type":"event","event":"update","data":{}}
+    ;
+    var evt_msg = try json.parseFromSlice(Message, testing.allocator, event_data, .{});
+    defer evt_msg.deinit();
+    try testing.expect(evt_msg.value.type == .event);
+}
+
+test "WebSocket Server - Client connection properties" {
+    var client = Client.init(42, "127.0.0.1", 8080, testing.allocator);
+    defer client.deinit();
+
+    try testing.expectEqual(@as(u32, 42), client.id);
+    try testing.expectEqualStrings("127.0.0.1", client.ip_address);
+    try testing.expectEqual(@as(u16, 8080), client.port);
+    try testing.expect(client.connected);
+}
+
+test "WebSocket Server - Server init with custom port" {
+    var server = Server.init(testing.allocator, .{ .port = 9999 });
+    defer server.deinit();
+
+    try testing.expectEqual(@as(u16, 9999), server.port);
+}
+
+test "WebSocket Server - Broadcast to topic" {
+    var client1 = Client.init(1, undefined, undefined, testing.allocator);
+    defer client1.deinit();
+    var client2 = Client.init(2, undefined, undefined, testing.allocator);
+    defer client2.deinit();
+
+    try client1.subscribe("broadcast_topic");
+    try client2.subscribe("broadcast_topic");
+
+    // Both should receive broadcasts to this topic
+    try testing.expect(client1.isSubscribed("broadcast_topic"));
+    try testing.expect(client2.isSubscribed("broadcast_topic"));
+}

@@ -5,23 +5,26 @@ const std = @import("std");
 const webui = @import("webui");
 
 // ============================================================================
-// Core Types
+// Error Types
 // ============================================================================
 
-pub const Scope = enum { Singleton, Transient };
-pub const DIError = error{ NoProvider, InjectorDestroyed };
+pub const DIError = error{
+    NoProvider,
+    InjectorDestroyed,
+    OutOfMemory,
+    ServiceInitFailed,
+    AllocatorRequired,
+};
 
-/// Service interface
 pub const Service = struct {
     name: []const u8,
 };
 
-/// Logger Service
 pub const LoggerService = struct {
     prefix: []const u8 = "[App]",
 
-    pub fn create() *LoggerService {
-        const self = std.heap.page_allocator.create(LoggerService) catch @panic("OOM");
+    pub fn create(allocator: std.mem.Allocator) DIError!*LoggerService {
+        const self = allocator.create(LoggerService) catch return DIError.OutOfMemory;
         self.* = .{};
         return self;
     }
@@ -41,33 +44,44 @@ pub const LoggerService = struct {
     pub fn err(self: *LoggerService, message: []const u8) void {
         std.debug.print("{s} [ERROR] {s}\n", .{ self.prefix, message });
     }
+
+    pub fn deinit(self: *LoggerService, allocator: std.mem.Allocator) void {
+        allocator.destroy(self);
+    }
 };
 
-/// Config Service
 pub const ConfigService = struct {
     data: std.StringHashMap([]const u8),
 
-    pub fn create() *ConfigService {
-        const self = std.heap.page_allocator.create(ConfigService) catch @panic("OOM");
-        self.* = .{ .data = std.StringHashMap([]const u8).init(std.heap.page_allocator) };
-        self.data.put("app.name", "Zig WebUI App") catch {};
-        self.data.put("app.version", "1.0.0") catch {};
+    pub fn create(allocator: std.mem.Allocator) DIError!*ConfigService {
+        const self = allocator.create(ConfigService) catch return DIError.OutOfMemory;
+        self.* = .{ .data = std.StringHashMap([]const u8).init(allocator) };
+        self.data.put("app.name", "Zig WebUI App") catch return DIError.OutOfMemory;
+        self.data.put("app.version", "1.0.0") catch return DIError.OutOfMemory;
         return self;
     }
 
     pub fn get(self: *ConfigService, key: []const u8, default: []const u8) []const u8 {
         return self.data.get(key) orelse default;
     }
+
+    pub fn deinit(self: *ConfigService, allocator: std.mem.Allocator) void {
+        var it = self.data.keyIterator();
+        while (it.next()) |key| {
+            allocator.free(key.*);
+        }
+        self.data.deinit();
+        allocator.destroy(self);
+    }
 };
 
-/// Window Service
 pub const WindowService = struct {
     window: usize = 0,
     width: u32 = 1280,
     height: u32 = 800,
 
-    pub fn create() *WindowService {
-        const self = std.heap.page_allocator.create(WindowService) catch @panic("OOM");
+    pub fn create(allocator: std.mem.Allocator) DIError!*WindowService {
+        const self = allocator.create(WindowService) catch return DIError.OutOfMemory;
         self.* = .{};
         return self;
     }
@@ -76,51 +90,69 @@ pub const WindowService = struct {
         self.window = w;
     }
 
+    pub fn getWindow(self: *WindowService) usize {
+        return self.window;
+    }
+
     pub fn getSize(self: *WindowService) struct { u32, u32 } {
         return .{ self.width, self.height };
     }
+
+    pub fn setSize(self: *WindowService, width: u32, height: u32) void {
+        self.width = width;
+        self.height = height;
+    }
+
+    pub fn deinit(self: *WindowService, allocator: std.mem.Allocator) void {
+        allocator.destroy(self);
+    }
 };
 
-/// Event Handler type
 pub const EventHandler = *const fn (?*anyopaque) callconv(.C) void;
 
-/// Event Service
 pub const EventService = struct {
     handlers: std.StringHashMap(EventHandler),
 
-    pub fn create() *EventService {
-        const self = std.heap.page_allocator.create(EventService) catch @panic("OOM");
-        self.* = .{ .handlers = std.StringHashMap(EventHandler).init(std.heap.page_allocator) };
+    pub fn create(allocator: std.mem.Allocator) DIError!*EventService {
+        const self = allocator.create(EventService) catch return DIError.OutOfMemory;
+        self.* = .{ .handlers = std.StringHashMap(EventHandler).init(allocator) };
         return self;
     }
 
-    pub fn bind(self: *EventService, element: []const u8, handler: EventHandler) !void {
-        const key = try std.heap.page_allocator.dupe(u8, element);
-        errdefer std.heap.page_allocator.free(key);
+    pub fn bind(self: *EventService, allocator: std.mem.Allocator, element: []const u8, handler: EventHandler) !void {
+        const key = try allocator.dupe(u8, element);
+        errdefer allocator.free(key);
         try self.handlers.put(key, handler);
+    }
+
+    pub fn deinit(self: *EventService, allocator: std.mem.Allocator) void {
+        var it = self.handlers.keyIterator();
+        while (it.next()) |key| {
+            allocator.free(key.*);
+        }
+        self.handlers.deinit();
+        allocator.destroy(self);
     }
 };
 
-/// API Handler type
 pub const ApiHandler = *const fn (?*anyopaque) callconv(.C) void;
 
-/// Backend API Service
 pub const BackendApiService = struct {
     handlers: std.StringHashMap(ApiHandler),
     call_count: usize = 0,
 
-    pub fn create() *BackendApiService {
-        const self = std.heap.page_allocator.create(BackendApiService) catch @panic("OOM");
+    pub fn create(allocator: std.mem.Allocator) DIError!*BackendApiService {
+        const self = allocator.create(BackendApiService) catch return DIError.OutOfMemory;
         self.* = .{
-            .handlers = std.StringHashMap(ApiHandler).init(std.heap.page_allocator),
+            .handlers = std.StringHashMap(ApiHandler).init(allocator),
             .call_count = 0,
         };
         return self;
     }
 
-    pub fn registerHandler(self: *BackendApiService, name: []const u8, handler: ApiHandler) !void {
-        const key = try std.heap.page_allocator.dupe(u8, name);
-        errdefer std.heap.page_allocator.free(key);
+    pub fn registerHandler(self: *BackendApiService, allocator: std.mem.Allocator, name: []const u8, handler: ApiHandler) !void {
+        const key = try allocator.dupe(u8, name);
+        errdefer allocator.free(key);
         try self.handlers.put(key, handler);
     }
 
@@ -131,73 +163,114 @@ pub const BackendApiService = struct {
     pub fn getCallCount(self: *BackendApiService) usize {
         return self.call_count;
     }
+
+    pub fn deinit(self: *BackendApiService, allocator: std.mem.Allocator) void {
+        var it = self.handlers.keyIterator();
+        while (it.next()) |key| {
+            allocator.free(key.*);
+        }
+        self.handlers.deinit();
+        allocator.destroy(self);
+    }
 };
 
-// ============================================================================
-// Injector (Simple Service Locator)
-// ============================================================================
-
 pub const Injector = struct {
+    allocator: std.mem.Allocator,
     logger: *LoggerService,
     config: *ConfigService,
     window: *WindowService,
     events: *EventService,
     api: *BackendApiService,
 
-    pub fn create() *Injector {
-        const self = std.heap.page_allocator.create(Injector) catch @panic("OOM");
+    pub fn create(allocator: std.mem.Allocator) DIError!*Injector {
+        const self = allocator.create(Injector) catch return DIError.OutOfMemory;
+        errdefer allocator.destroy(self);
+
+        const logger = try LoggerService.create(allocator);
+        errdefer logger.deinit(allocator);
+
+        const config = try ConfigService.create(allocator);
+        errdefer config.deinit(allocator);
+
+        const window = try WindowService.create(allocator);
+        errdefer window.deinit(allocator);
+
+        const events = try EventService.create(allocator);
+        errdefer events.deinit(allocator);
+
+        const api = try BackendApiService.create(allocator);
+        errdefer api.deinit(allocator);
+
         self.* = .{
-            .logger = LoggerService.create(),
-            .config = ConfigService.create(),
-            .window = WindowService.create(),
-            .events = EventService.create(),
-            .api = BackendApiService.create(),
+            .allocator = allocator,
+            .logger = logger,
+            .config = config,
+            .window = window,
+            .events = events,
+            .api = api,
         };
+
         return self;
     }
 
     pub fn destroy(self: *Injector) void {
-        std.heap.page_allocator.destroy(self);
+        const allocator = self.allocator;
+        self.api.deinit(allocator);
+        self.events.deinit(allocator);
+        self.window.deinit(allocator);
+        self.config.deinit(allocator);
+        self.logger.deinit(allocator);
+        allocator.destroy(self);
     }
 };
 
-// ============================================================================
-// Global Injector
-// ============================================================================
-
 var global_injector: ?*Injector = null;
 
-pub fn getInjector() *Injector {
-    return global_injector orelse @panic("Injector not initialized");
+pub fn getInjector() DIError!*Injector {
+    return global_injector orelse DIError.InjectorDestroyed;
 }
 
-pub fn bootstrap() *Injector {
-    global_injector = Injector.create();
+pub fn bootstrap() DIError!*Injector {
+    if (global_injector) |inj| {
+        return inj;
+    }
+    global_injector = try Injector.create(std.heap.page_allocator);
     return global_injector.?;
+}
+
+pub fn shutdown() void {
+    if (global_injector) |inj| {
+        inj.destroy();
+        global_injector = null;
+    }
 }
 
 // ============================================================================
 // Convenience functions
 // ============================================================================
 
-pub fn getLogger() *LoggerService {
-    return getInjector().logger;
+pub fn getLogger() DIError!*LoggerService {
+    return getInjector();
 }
 
-pub fn getConfig() *ConfigService {
-    return getInjector().config;
+pub fn getConfig() DIError!*ConfigService {
+    const inj = try getInjector();
+    return inj.config;
 }
 
-pub fn getWindowService() *WindowService {
-    return getInjector().window;
+pub fn getWindowService() DIError!*WindowService {
+    const inj = try getInjector();
+    return inj.window;
 }
 
-pub fn getEventService() *EventService {
-    return getInjector().events;
+pub fn getEventService() DIError!*EventService {
+    const inj = try getInjector();
+    return inj.events;
 }
 
-pub fn getApiService() *BackendApiService {
-    return getInjector().api;
+pub fn getApiService() DIError!*BackendApiService {
+    const inj = try getInjector();
+    return inj.api;
 }
 
 // ============================================================================
@@ -207,7 +280,7 @@ pub fn getApiService() *BackendApiService {
 const testing = std.testing;
 
 test "DI - Injector creates all services" {
-    const inj = Injector.create();
+    const inj = try Injector.create(testing.allocator);
     defer inj.destroy();
 
     try testing.expect(inj.logger != null);
@@ -218,50 +291,134 @@ test "DI - Injector creates all services" {
 }
 
 test "DI - LoggerService logs messages" {
-    const logger = LoggerService.create();
+    const logger = try LoggerService.create(testing.allocator);
+    defer logger.deinit(testing.allocator);
     logger.info("Test message");
     try testing.expectEqualStrings("[App]", logger.prefix);
 }
 
 test "DI - ConfigService stores values" {
-    const config = ConfigService.create();
-    try testing.expectEqualStrings("Zig WebUI App", config.get("app.name", "Default"));
+    const config = try ConfigService.create(testing.allocator);
+    defer config.deinit(testing.allocator);
     try config.data.put("test.key", "test_value");
     try testing.expectEqualStrings("test_value", config.get("test.key", "Default"));
 }
 
 test "DI - WindowService stores window" {
-    const window = WindowService.create();
+    const window = try WindowService.create(testing.allocator);
+    defer window.deinit(testing.allocator);
     window.setWindow(123);
     try testing.expectEqual(@as(usize, 123), window.window);
 }
 
 test "DI - EventService binds handlers" {
-    const events = EventService.create();
+    const events = try EventService.create(testing.allocator);
+    defer events.deinit(testing.allocator);
     const dummy = struct {
         fn handler(_: ?*anyopaque) callconv(.C) void {}
     }.handler;
-    try events.bind("test", dummy);
+    try events.bind(testing.allocator, "test", dummy);
     try testing.expect(events.handlers.count() > 0);
 }
 
 test "DI - ApiService tracks calls" {
-    const api = BackendApiService.create();
+    const api = try BackendApiService.create(testing.allocator);
+    defer api.deinit(testing.allocator);
     try testing.expectEqual(@as(usize, 0), api.call_count);
     api.incrementCallCount();
     try testing.expectEqual(@as(usize, 1), api.call_count);
 }
 
 test "DI - Bootstrap initializes global injector" {
-    _ = bootstrap();
+    _ = try bootstrap();
     const inj = getInjector();
     try testing.expect(inj != null);
 }
 
 test "DI - Convenience functions work" {
-    _ = bootstrap();
+    _ = try bootstrap();
     const logger = getLogger();
     const config = getConfig();
     try testing.expect(logger != null);
     try testing.expect(config != null);
+}
+
+test "DI - GetInjector returns error when not bootstrapped" {
+    shutdown(); // Ensure no global injector
+    const result = getInjector();
+    try testing.expectError(DIError.InjectorDestroyed, result);
+}
+
+test "DI - Injector holds correct allocator" {
+    const inj = try Injector.create(testing.allocator);
+    defer inj.destroy();
+    try testing.expectEqual(testing.allocator, inj.allocator);
+}
+
+test "DI - WindowService set and get size" {
+    const window = try WindowService.create(testing.allocator);
+    defer window.deinit(testing.allocator);
+
+    window.setSize(1920, 1080);
+    const size = window.getSize();
+    try testing.expectEqual(@as(u32, 1920), size[0]);
+    try testing.expectEqual(@as(u32, 1080), size[1]);
+}
+
+test "DI - ConfigService default values" {
+    const config = try ConfigService.create(testing.allocator);
+    defer config.deinit(testing.allocator);
+
+    try testing.expectEqualStrings("Zig WebUI App", config.get("app.name", "Default"));
+    try testing.expectEqualStrings("1.0.0", config.get("app.version", "0.0.0"));
+}
+
+test "DI - Multiple event bindings" {
+    const events = try EventService.create(testing.allocator);
+    defer events.deinit(testing.allocator);
+
+    const handler1 = struct {
+        fn h(_: ?*anyopaque) callconv(.C) void {}
+    }.handler;
+    const handler2 = struct {
+        fn h(_: ?*anyopaque) callconv(.C) void {}
+    }.handler;
+
+    try events.bind(testing.allocator, "event1", handler1);
+    try events.bind(testing.allocator, "event2", handler2);
+
+    try testing.expectEqual(@as(usize, 2), events.handlers.count());
+}
+
+test "DI - ApiService register and call handlers" {
+    const api = try BackendApiService.create(testing.allocator);
+    defer api.deinit(testing.allocator);
+
+    const handler = struct {
+        fn h(_: ?*anyopaque) callconv(.C) void {}
+    }.handler;
+
+    try api.registerHandler(testing.allocator, "testHandler", handler);
+    try testing.expect(api.handlers.contains("testHandler"));
+
+    api.incrementCallCount();
+    api.incrementCallCount();
+    try testing.expectEqual(@as(usize, 2), api.getCallCount());
+}
+
+test "DI - Injector destroy cleans up all services" {
+    const inj = try Injector.create(testing.allocator);
+    // Store pointer to verify structure before destroy
+    _ = inj.logger;
+    inj.destroy();
+
+    // If we get here without panic, cleanup worked
+    try testing.expect(true);
+}
+
+test "DI - Bootstrap returns existing injector" {
+    const inj1 = try bootstrap();
+    const inj2 = try bootstrap();
+    try testing.expectEqual(inj1, inj2);
+    shutdown(); // Clean up
 }

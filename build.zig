@@ -57,6 +57,14 @@ pub fn build(b: *std.Build) void {
     });
     webui_mod.addIncludePath(b.path("thirdparty/webui/include"));
 
+    // Utilities module
+    const utils_mod = b.createModule(.{
+        .root_source_file = b.path("src/utils/utils.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    utils_mod.addIncludePath(b.path("thirdparty/webui/include"));
+
     // Main executable module
     const exe_mod = b.createModule(.{
         .root_source_file = b.path("src/main.zig"),
@@ -65,6 +73,7 @@ pub fn build(b: *std.Build) void {
     });
 
     exe_mod.addImport("webui", webui_mod);
+    exe_mod.addImport("utils", utils_mod);
 
     const exe = b.addExecutable(.{
         .name = "zig_webui_angular_rspack",

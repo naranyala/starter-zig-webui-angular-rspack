@@ -4,7 +4,18 @@ This document describes the backend-frontend communication mechanisms used in th
 
 ## Overview
 
-The application uses WebUI's native WebSocket bridge for all backend-frontend communication. No HTTP or HTTPS protocols are used.
+The application uses WebUI's native WebSocket bridge for all backend-frontend communication. No HTTP or HTTPS protocols are used. This provides a secure, efficient, and low-latency communication channel between the Zig backend and Angular frontend.
+
+## Why WebSocket Bridge?
+
+The WebUI bridge offers several advantages over HTTP:
+
+1. **Lower Latency**: No HTTP overhead for each request
+2. **Bidirectional Communication**: Server can push events to client
+3. **Single Connection**: Reuses WebSocket connection for all communication
+4. **No CORS**: Not needed for localhost communication
+5. **Simpler Protocol**: JSON-based messages without HTTP headers
+6. **Type Safety**: Direct function binding between backend and frontend
 
 ## Architecture
 
@@ -13,10 +24,19 @@ The application uses WebUI's native WebSocket bridge for all backend-frontend co
 |   Frontend       |                    |   Backend        |
 |   (Angular)      |                    |   (Zig)          |
 |                  |                    |                  |
-|  window.func()   |------------------->|  webui.bind()    |
+|  window.func()  |------------------->|  webui.bind()    |
 |                  |    WebSocket       |                  |
 |  receives data   |<-------------------|  webui.run()     |
 +------------------+                    +------------------+
+
+Connection Flow:
+1. Backend starts WebUI server (CivetWeb)
+2. Frontend loads via WebUI window
+3. WebUI bridge injects JavaScript
+4. Frontend calls window.functionName()
+5. WebSocket message sent to backend
+6. Backend handler executes
+7. Response sent back via webui.run()
 ```
 
 ## Communication Patterns
@@ -145,6 +165,18 @@ webui.broadcast(event_name, data);
 7. Frontend receives response as CustomEvent
 8. Promise resolves with data
 
+### Internal Protocol
+
+WebUI uses a custom binary protocol:
+
+```
+Byte 0:   Signature (0xDD)
+Bytes 1-4: Token (connection identifier)
+Bytes 5-6: Bind ID
+Byte 7:    Command type
+Bytes 8+:  Data (JSON payload)
+```
+
 ## Performance
 
 | Operation | Latency |
@@ -153,6 +185,13 @@ webui.broadcast(event_name, data);
 | Medium message (10KB) | 3-10ms |
 | Large message (100KB) | 20-50ms |
 | Connection setup | 5-15ms |
+
+### Optimization Tips
+
+1. **Batch Operations**: Combine multiple operations into single calls
+2. **Binary Data**: Use raw WebSocket for large binary data
+3. **Connection Pooling**: WebUI handles this automatically
+4. **Minimize JSON**: Keep message payloads small
 
 ## Error Handling
 
@@ -179,12 +218,31 @@ try {
 }
 ```
 
+### Error Response Format
+
+```json
+{
+  "success": false,
+  "error": "Error description",
+  "code": "ERROR_CODE"
+}
+```
+
 ## Security Considerations
 
 1. **Localhost Only**: WebUI binds to localhost by default
 2. **Token Validation**: Each connection has a unique token
 3. **Function Binding**: Only explicitly bound functions are callable
 4. **No CORS**: Not needed for localhost communication
+5. **No SSL**: Communication stays local (configure TLS for production)
+
+### Security Best Practices
+
+- Always validate input from the frontend
+- Use parameterized queries for database operations
+- Implement rate limiting for sensitive functions
+- Log security-relevant events
+- Sanitize all user-provided data
 
 ## Best Practices
 
@@ -193,6 +251,8 @@ try {
 3. **Timeout Handling**: Set appropriate timeouts for long operations
 4. **Logging**: Log all backend function calls for debugging
 5. **Type Safety**: Use TypeScript types for backend responses
+6. **Error Boundaries**: Handle errors gracefully in frontend
+7. **Retry Logic**: Implement retry for transient failures
 
 ## Alternative: Pure WebSocket
 
@@ -206,9 +266,46 @@ See `src/communication/websocket_server.zig` for implementation.
 - Publish/Subscribe patterns
 - Large file transfers
 - Binary data communication
+- Multiple client connections
+- Custom protocols
+
+### When to Use Pure WebSocket vs WebUI Bridge
+
+| Feature | WebUI Bridge | Pure WebSocket |
+|---------|--------------|----------------|
+| Ease of Use | High | Medium |
+| Function Binding | Automatic | Manual |
+| Binary Data | Limited | Full Support |
+| Pub/Sub | Via Events | Native |
+| Multi-client | Limited | Full Support |
+| Custom Protocol | No | Yes |
+
+## Testing Communication
+
+### Backend Test
+
+```zig
+test "Communication - Bind function" {
+    const window = webui.newWindow();
+    const id = webui.bind(window, "test", testHandler);
+    try testing.expect(id > 0);
+}
+```
+
+### Frontend Test
+
+```typescript
+describe('ApiService', () => {
+  it('should call backend function', async () => {
+    const result = await window.testFunction();
+    expect(result.success).toBe(true);
+  });
+});
+```
 
 ## Related Documentation
 
 - [Dependency Injection](dependency-injection.md)
 - [Backend Architecture](backend-architecture.md)
 - [Frontend Architecture](frontend-architecture.md)
+- [Build System](build-system.md)

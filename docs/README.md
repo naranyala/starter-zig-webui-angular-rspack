@@ -14,6 +14,7 @@ Welcome to the Zig WebUI Angular Rspack documentation.
 - [Backend Architecture](backend-architecture.md) - Zig backend structure
 - [Communication](communication.md) - Backend-frontend communication
 - [Dependency Injection](dependency-injection.md) - DI system usage
+- [Utilities](UTILITIES.md) - Desktop utility modules
 
 ## Development
 
@@ -55,26 +56,29 @@ Welcome to the Zig WebUI Angular Rspack documentation.
 ## Project Structure
 
 ```
-zig-webui-angular-rspack/
+starter-zig-webui-angular-rspack/
 ├── frontend/              # Angular frontend
 │   ├── src/
 │   │   ├── core/         # Core services
 │   │   ├── views/        # Components
-│   │   └── models/       # Data models
+│   │   ├── models/       # Data models
+│   │   ├── types/        # Type definitions
+│   │   └── integration/  # Integration tests
 │   └── dist/             # Build output
 │
 ├── src/                   # Zig backend
 │   ├── main.zig          # Entry point
 │   ├── di.zig            # Dependency injection
-│   └── communication/    # Communication protocols
+│   ├── utils/            # Utility modules
+│   └── communication/     # Communication protocols
 │
 ├── thirdparty/            # Third-party libraries
-│   └── webui/            # WebUI library
+│   └── webui/           # WebUI library
 │
 ├── docs/                  # Documentation
-├── build.zig              # Zig build config
-├── run.sh                 # Build script
-└── README.md              # Project overview
+├── build.zig             # Zig build config
+├── run.sh                # Build script
+└── README.md             # Project overview
 ```
 
 ## Quick Reference
@@ -120,3 +124,13 @@ For issues and questions:
 1. Check the [Troubleshooting](build-system.md#troubleshooting) section
 2. Review the [Communication](communication.md) documentation
 3. Examine the source code in `src/` and `frontend/src/`
+4. Run tests to verify your setup: `zig build test`
+
+## Contributing
+
+When contributing to this project:
+
+1. Follow the code style conventions in each module
+2. Add tests for new functionality
+3. Update documentation to reflect changes
+4. Ensure all tests pass before submitting
