@@ -1,0 +1,63 @@
+name: Windows
+
+on:
+  workflow_call:
+
+jobs:
+  setup:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: vwebui
+          submodules: true
+      - name: Setup V
+        shell: bash
+        run: |
+          curl -Lo v_windows.zip https://github.com/vlang/v/releases/latest/download/v_windows.zip
+          7z x v_windows.zip
+          mv v ~/v && ~/v/v symlink
+      - name: Setup WebUI library
+        shell: bash
+        run: mkdir -p ~/.vmodules && mv vwebui ~/.vmodules/vwebui
+      - name: Save cache
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            ~/v
+            ~/.vmodules
+          key: ${{ runner.os }}-${{ github.sha }}
+
+  build-examples:
+    needs: setup
+    runs-on: windows-latest
+    strategy:
+      matrix:
+        cc: [gcc] # only gcc on windows for now
+        # optimization: ['', '-W -cstrict']
+      fail-fast: false
+    env:
+      VFLAGS: -cg -cc ${{ matrix.cc }}
+    steps:
+      - name: Restore cache
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            ~/v
+            ~/.vmodules
+          key: ${{ runner.os }}-${{ github.sha }}
+          fail-on-cache-miss: true
+      - name: Symlink V
+        run: ~/v/v symlink
+      - name: Compile V
+        run: v -showcc self && v doctor
+      - name: Build
+        run: |
+          $examplePaths = Get-ChildItem -Path "$HOME/.vmodules/vwebui/examples" -Depth 0
+          foreach ($path in $examplePaths) {
+            if ($path.PSIsContainer -or $path -like "*.v") {
+              $cmd = "v $path"
+              Write-Output $cmd
+              Invoke-Expression $cmd
+            }
+          }
