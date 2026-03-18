@@ -148,13 +148,13 @@ pub const EventBus = struct {
         const self = allocator.create(EventBus) catch return DIError.OutOfMemory;
         self.* = .{
             .allocator = allocator,
-            .subscriptions = std.ArrayList(EventSubscription).init(allocator),
+            .subscriptions = std.ArrayList(EventSubscription){ .allocator = allocator },
         };
         return self;
     }
 
     pub fn deinit(self: *Self) void {
-        self.subscriptions.deinit();
+        self.subscriptions.deinit(self.allocator);
         self.allocator.destroy(self);
     }
 
@@ -210,17 +210,37 @@ pub const EventBus = struct {
 
     pub fn emit(self: *Self, event: *const Event) void {
         self.mutex.lock();
-        var to_remove = std.ArrayList(usize).init(self.allocator);
-        defer to_remove.deinit();
 
-        var matching_subscriptions = std.ArrayList(*EventSubscription).init(self.allocator);
-        defer matching_subscriptions.deinit();
+        var matching_subscriptions = std.ArrayList(*EventSubscription){
+            .allocator = self.allocator,
+            .items = &[_]*EventSubscription{},
+            .capacity = 0,
+        };
+        defer {
+            // Clean up any remaining subscriptions if loop exits early
+            for (matching_subscriptions.items) |sub| {
+                self.allocator.destroy(sub);
+            }
+            matching_subscriptions.deinit();
+        }
 
+        // Collect matching subscriptions
         for (self.subscriptions.items) |*sub| {
             if (std.mem.eql(u8, sub.event_name, event.name)) {
-                const copy = self.allocator.create(EventSubscription) catch return;
+                const copy = self.allocator.create(EventSubscription) catch {
+                    // Allocation failed - unlock and return
+                    self.mutex.unlock();
+                    return;
+                };
                 copy.* = sub.*;
-                matching_subscriptions.append(copy) catch {};
+                if (matching_subscriptions.append(copy)) |_| {
+                    // Success
+                } else |_| {
+                    // Append failed - clean up the allocated copy
+                    self.allocator.destroy(copy);
+                    self.mutex.unlock();
+                    return;
+                }
             }
         }
 
@@ -372,7 +392,7 @@ pub const ConfigService = struct {
         const self = allocator.create(ConfigService) catch return DIError.OutOfMemory;
         self.* = .{
             .allocator = allocator,
-            .data = std.StringHashMap([]const u8).init(allocator),
+            .data = std.StringHashMap([]const u8){ .allocator = allocator },
         };
         try self.data.put(try allocator.dupe(u8, "app.name"), try allocator.dupe(u8, "Zig WebUI App"));
         try self.data.put(try allocator.dupe(u8, "app.version"), try allocator.dupe(u8, "1.0.0"));
@@ -526,7 +546,7 @@ pub const WindowService = struct {
     }
 };
 
-pub const WebuiEventHandler = *const fn (event: ?*webui.Event) callconv(.C) void;
+pub const WebuiEventHandler = *const fn (event: ?*webui.Event) callconv(.c) void;
 
 pub const EventService = struct {
     allocator: std.mem.Allocator,
@@ -536,7 +556,7 @@ pub const EventService = struct {
         const self = allocator.create(EventService) catch return DIError.OutOfMemory;
         self.* = .{
             .allocator = allocator,
-            .handlers = std.StringHashMap(WebuiEventHandler).init(allocator),
+            .handlers = std.StringHashMap(WebuiEventHandler){ .allocator = allocator },
         };
         return self;
     }
@@ -574,7 +594,7 @@ pub const BackendApiService = struct {
         const self = allocator.create(BackendApiService) catch return DIError.OutOfMemory;
         self.* = .{
             .allocator = allocator,
-            .handlers = std.StringHashMap(WebuiEventHandler).init(allocator),
+            .handlers = std.StringHashMap(WebuiEventHandler){ .allocator = allocator },
             .call_count = 0,
         };
         return self;
@@ -707,7 +727,7 @@ pub const StorageService = struct {
         const self = allocator.create(StorageService) catch return DIError.OutOfMemory;
         self.* = .{
             .allocator = allocator,
-            .data = std.StringHashMap([]const u8).init(allocator),
+            .data = std.StringHashMap([]const u8){ .allocator = allocator },
         };
         return self;
     }

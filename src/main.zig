@@ -100,10 +100,29 @@ fn cleanup(window: usize) void {
 
 var global_window_handle: usize = 0;
 
+var signal_received: std.atomic.Value(bool) = std.atomic.Value(bool).init(false);
+
+fn handleSignal(sig_num: c_int) callconv(.c) void {
+    _ = sig_num;
+    signal_received.store(true, .seq_cst);
+
+    // Try to close the window if it exists
+    if (global_window_handle != 0) {
+        webui.close(global_window_handle);
+    }
+}
+
 fn setupSignalHandlers() void {
-    // Signal handlers are handled by webui.wait() internally
-    // This function预留 for future signal handling improvements
-    _ = global_window_handle;
+    // Setup signal handlers for graceful shutdown
+    const action = std.posix.Sigaction{
+        .handler = .{ .handler = handleSignal },
+        .mask = std.posix.sigemptyset(),
+        .flags = 0,
+    };
+
+    // Handle SIGINT (Ctrl+C) and SIGTERM (termination signal)
+    _ = std.posix.sigaction(std.posix.SIG.INT, &action, null);
+    _ = std.posix.sigaction(std.posix.SIG.TERM, &action, null);
 }
 
 fn bindBackendFunctions(window: usize) AppError!void {
@@ -142,24 +161,21 @@ fn getFrontendPath(allocator: std.mem.Allocator) ![]const u8 {
 }
 
 pub fn main() !void {
-    const stdout = std.io.getStdOut().writer();
-    const stderr = std.io.getStdErr().writer();
-
     setupSignalHandlers();
 
-    try stdout.print("Starting Zig WebUI Angular Rspack Server...\n", .{});
-    try stdout.print("WebUI Version: {s}\n", .{webui.version});
-    try stdout.print("Communication: WebUI WebSocket Bridge (NO HTTP/HTTPS)\n", .{});
-    try stdout.print("DI System: Angular-style Dependency Injection with Event Bus\n", .{});
-    try stdout.print("\n", .{});
+    std.debug.print("Starting Zig WebUI Angular Rspack Server...\n", .{});
+    std.debug.print("WebUI Version: {s}\n", .{webui.version});
+    std.debug.print("Communication: WebUI WebSocket Bridge (NO HTTP/HTTPS)\n", .{});
+    std.debug.print("DI System: Angular-style Dependency Injection with Event Bus\n", .{});
+    std.debug.print("\n", .{});
 
     var window: usize = 0;
     errdefer cleanup(window);
 
-    try stdout.print("[DI] Bootstrapping dependency injection...\n", .{});
+    std.debug.print("[DI] Bootstrapping dependency injection...\n", .{});
 
     const injector = di.bootstrap() catch |err| {
-        try stderr.print("[ERROR] Failed to bootstrap DI: {}\n", .{err});
+        std.debug.print("[ERROR] Failed to bootstrap DI: {}\n", .{err});
         return AppError.DiBootstrapFailed;
     };
 
@@ -180,7 +196,6 @@ pub fn main() !void {
 
     logger.info("Frontend path: ");
     logger.info(frontend_path);
-    _ = injector.getConfig();
 
     window = webui.newWindow();
     if (window == 0) {
@@ -193,8 +208,15 @@ pub fn main() !void {
     window_service.setWindow(window);
 
     const size = window_service.getSize();
-    webui.setSize(window, size[0], size[1]);
+    if (size[0] == 0 or size[1] == 0) {
+        logger.warn("Invalid window size {0, 0}, using default 1280x800");
+        webui.setSize(window, 1280, 800);
+    } else {
+        webui.setSize(window, size[0], size[1]);
+    }
     webui.setResizable(window, true);
+    // Maximize window on startup
+    webui.maximize(window);
 
     window_service.setTitle("Zig WebUI Angular App");
 
@@ -228,34 +250,46 @@ pub fn main() !void {
         std.debug.print("[DEBUG] No browser available: {s}\n", .{last_error});
 
         // Run in server-only mode - wait for interrupt
-        try stdout.print("\nNo browser available. Running in headless mode.\n", .{});
-        try stdout.print("Press Ctrl+C to stop the server.\n", .{});
+        std.debug.print("{s}", .{"\nNo browser available. Running in headless mode.\n"});
+        std.debug.print("{s}", .{"Press Ctrl+C to stop the server.\n"});
 
-        // Wait for signal/interrupt
-        webui.wait();
+        // Wait for signal/interrupt using async wait
+        while (webui.waitAsync()) {
+            if (signal_received.load(.seq_cst)) {
+                logger.info("Signal received, shutting down...");
+                break;
+            }
+            std.Thread.sleep(100 * std.time.ns_per_ms); // Sleep 100ms to avoid busy waiting
+        }
     } else {
         logger.info("Desktop window launched successfully");
 
         di.emitAppStarted();
 
-        try stdout.print("\nServer running. Press Ctrl+C to stop.\n", .{});
+        std.debug.print("\nServer running. Press Ctrl+C to stop.\n");
 
-        webui.wait();
+        // Wait for window to close or signal
+        while (webui.waitAsync()) {
+            if (signal_received.load(.seq_cst)) {
+                logger.info("Signal received, shutting down...");
+                webui.exit();
+                break;
+            }
+            std.Thread.sleep(100 * std.time.ns_per_ms); // Sleep 100ms to avoid busy waiting
+        }
 
         logger.info("Application stopped");
-        try stdout.print("\nServer stopped. API calls: {d}\n", .{injector.getApi().getCallCount()});
+        std.debug.print("\nServer stopped. API calls: {d}\n", .{injector.getApi().getCallCount()});
     }
-
-    _ = injector.getEventBus();
 }
 
-fn handleCoreApi(event: ?*webui.Event) callconv(.C) void {
+fn handleCoreApi(event: ?*webui.Event) callconv(.c) void {
     if (event) |e| {
         std.debug.print("[CoreAPI] Event: {s}\n", .{e.getElementId()});
     }
 }
 
-fn handlePing(event: ?*webui.Event) callconv(.C) void {
+fn handlePing(event: ?*webui.Event) callconv(.c) void {
     if (event) |e| {
         std.debug.print("[Ping] from: {s}\n", .{e.getElementId()});
 
@@ -267,7 +301,7 @@ fn handlePing(event: ?*webui.Event) callconv(.C) void {
     }
 }
 
-fn handleGetData(event: ?*webui.Event) callconv(.C) void {
+fn handleGetData(event: ?*webui.Event) callconv(.c) void {
     if (event) |e| {
         std.debug.print("[GetData] from: {s}\n", .{e.getElementId()});
 
@@ -279,7 +313,7 @@ fn handleGetData(event: ?*webui.Event) callconv(.C) void {
     }
 }
 
-fn handleEmitEvent(event: ?*webui.Event) callconv(.C) void {
+fn handleEmitEvent(event: ?*webui.Event) callconv(.c) void {
     if (event) |e| {
         std.debug.print("[EmitEvent] from: {s}\n", .{e.getElementId()});
 

@@ -1,8 +1,8 @@
 import { CommonModule } from '@angular/common';
 import { Component, computed, inject, signal } from '@angular/core';
+import { FormsModule } from '@angular/forms';
 import { WinBoxService, type WinBoxInstance } from '../core/winbox.service';
-import { AuthComponent } from './auth/auth.component';
-import { SqliteCrudComponent } from './sqlite/sqlite.component';
+import { LucideAngularModule } from 'lucide-angular';
 
 export interface NavItem {
   id: string;
@@ -33,18 +33,18 @@ export type ViewMode = 'grid' | 'list';
 export type AppView = 'home' | 'auth' | 'sqlite' | 'devtools';
 
 const TECH_CARDS: Card[] = [
-  { id: 1, title: 'Authentication', description: 'Login & Register', icon: '🔐', color: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', type: 'Feature', date: '2026-03-16' },
-  { id: 2, title: 'SQLite CRUD', description: 'Database Operations', icon: '🗄️', color: 'linear-gradient(135deg, #00b09b 0%, #96c93d 100%)', type: 'Feature', date: '2026-03-16' },
-  { id: 3, title: 'DevTools', description: 'Debugging Tools', icon: '🔧', color: 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)', type: 'Tool', date: '2026-03-15' },
-  { id: 4, title: 'System Info', description: 'System Monitoring', icon: '📊', color: 'linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)', type: 'Monitor', date: '2026-03-15' },
-  { id: 5, title: 'Network', description: 'Network Stats', icon: '🌐', color: 'linear-gradient(135deg, #43e97b 0%, #38f9d7 100%)', type: 'Monitor', date: '2026-03-14' },
-  { id: 6, title: 'Processes', description: 'Process Manager', icon: '⚙️', color: 'linear-gradient(135deg, #fa709a 0%, #fee140 100%)', type: 'Tool', date: '2026-03-14' },
+  { id: 1, title: 'Authentication', description: 'Login & Register', icon: 'lock', color: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', type: 'Feature', date: '2026-03-16' },
+  { id: 2, title: 'SQLite CRUD', description: 'Database Operations', icon: 'database', color: 'linear-gradient(135deg, #00b09b 0%, #96c93d 100%)', type: 'Feature', date: '2026-03-16' },
+  { id: 3, title: 'DevTools', description: 'Debugging Tools', icon: 'tool', color: 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)', type: 'Tool', date: '2026-03-15' },
+  { id: 4, title: 'System Info', description: 'System Monitoring', icon: 'bar-chart-2', color: 'linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)', type: 'Monitor', date: '2026-03-15' },
+  { id: 5, title: 'Network', description: 'Network Stats', icon: 'globe', color: 'linear-gradient(135deg, #43e97b 0%, #38f9d7 100%)', type: 'Monitor', date: '2026-03-14' },
+  { id: 6, title: 'Processes', description: 'Process Manager', icon: 'settings', color: 'linear-gradient(135deg, #fa709a 0%, #fee140 100%)', type: 'Tool', date: '2026-03-14' },
 ];
 
 @Component({
   selector: 'app-root',
   standalone: true,
-  imports: [CommonModule, AuthComponent, SqliteCrudComponent],
+  imports: [CommonModule, FormsModule, LucideAngularModule],
   templateUrl: './app.component.html',
   styleUrls: ['./app.component.css'],
 })
@@ -52,10 +52,28 @@ export class AppComponent {
   private readonly winboxService = inject(WinBoxService);
 
   // Column sizes (percentages, must sum to 100)
-  readonly leftColumnSize = signal(0); // Hidden
-  readonly middleColumnSize = signal(65); // Main content
-  readonly rightColumnSize = signal(35); // Preview
-
+  readonly leftColumnSize = signal(25); // Left column (menu)
+  readonly middleColumnSize = signal(25); // Middle column (content)
+  readonly rightColumnSize = signal(75); // Right column (content)
+  
+  // Toggle layout mode
+  toggleLayoutMode(): void {
+    const currentMode = this.layoutMode();
+    const newMode = currentMode === 'main-left' ? 'main-right' : 'main-left';
+    this.layoutMode.set(newMode);
+    
+    // Update column sizes based on layout mode
+    if (newMode === 'main-left') {
+      // Left column 25%, Right column 75%
+      this.leftColumnSize.set(25);
+      this.rightColumnSize.set(75);
+    } else {
+      // Left column 75%, Right column 25%
+      this.leftColumnSize.set(75);
+      this.rightColumnSize.set(25);
+    }
+  }
+  
   // Column collapsed state
   readonly leftColumnCollapsed = signal(true); // Always collapsed
 
@@ -66,6 +84,91 @@ export class AppComponent {
   readonly viewMode = signal<ViewMode>('grid');
   readonly selectedCard = signal<Card | null>(null);
   readonly fuzzySearchActive = signal(false);
+  readonly showAppInfo = signal(false);
+  
+  // Layout mode for switching between main-left and main-right
+  readonly layoutMode = signal<'main-left' | 'main-right'>('main-left');
+  
+  // Menu search
+  readonly menuSearchQuery = signal('');
+  
+  // Menu selection state
+  readonly selectedMainMenu = signal<number | null>(null);
+  readonly selectedSupportMenu = signal<number | null>(null);
+  
+   // Menu items definition
+   readonly mainMenuItems = [
+     { icon: 'bar-chart-2', label: 'Dashboard', value: 1 },
+     { icon: 'folder', label: 'Files', value: 2 },
+     { icon: 'users', label: 'Users', value: 3 },
+     { icon: 'settings', label: 'Settings', value: 4 },
+     { icon: 'bell', label: 'Notifications', value: 5 },
+     { icon: 'file-text', label: 'Reports', value: 6 },
+   ];
+   
+   readonly supportMenuItems = [
+     { icon: 'help-circle', label: 'Help', value: 1 },
+     { icon: 'message-square', label: 'Contact', value: 2 },
+     { icon: 'book', label: 'Documentation', value: 3 },
+     { icon: 'plus-square', label: 'Updates', value: 4 },
+   ];
+  
+  // Filtered menu items based on search
+  readonly filteredMainMenu = computed(() => {
+    const query = this.menuSearchQuery().toLowerCase();
+    if (!query) {
+      return this.mainMenuItems;
+    }
+    return this.mainMenuItems.filter(item => item.label.toLowerCase().includes(query));
+  });
+  
+  readonly filteredSupportMenu = computed(() => {
+    const query = this.menuSearchQuery().toLowerCase();
+    if (!query) {
+      return this.supportMenuItems;
+    }
+    return this.supportMenuItems.filter(item => item.label.toLowerCase().includes(query));
+  });
+  
+   // Reactive menu item for second column based on selection
+   readonly menuItems = computed(() => {
+     const mainId = this.selectedMainMenu();
+     const supportId = this.selectedSupportMenu();
+     
+     if (mainId === 1) {
+       return { icon: 'bar-chart-2', title: 'Overview Dashboard' };
+     }
+     if (mainId === 2) {
+       return { icon: 'folder', title: 'File Manager' };
+     }
+     if (mainId === 3) {
+       return { icon: 'user', title: 'User Management' };
+     }
+     if (mainId === 4) {
+       return { icon: 'settings', title: 'System Settings' };
+     }
+     if (mainId === 5) {
+       return { icon: 'bell', title: 'Notification Center' };
+     }
+     if (mainId === 6) {
+       return { icon: 'bar-chart-2', title: 'Reports Dashboard' };
+     }
+     if (supportId === 1) {
+       return { icon: 'book-open', title: 'Help Center' };
+     }
+     if (supportId === 2) {
+       return { icon: 'message-square', title: 'Contact Support' };
+     }
+     if (supportId === 3) {
+       return { icon: 'book', title: 'Documentation' };
+     }
+     if (supportId === 4) {
+       return { icon: 'refresh-cw', title: 'Updates & Changes' };
+     }
+     
+     // Default state when nothing is selected
+     return { icon: 'list', title: 'Select a menu item' };
+   });
 
   // Window management
   readonly windowEntries = signal<WindowEntry[]>([]);
@@ -86,50 +189,50 @@ export class AppComponent {
   // Computed signals
   readonly navigationItems = computed(() => []);
   
-  readonly filteredCards = computed(() => {
-    const query = this.searchQuery().toLowerCase().trim();
-    if (!query) {
-      return TECH_CARDS.map(c => ({ ...c, score: 0 }));
-    }
-    
-    // Fuzzy search scoring
-    return TECH_CARDS.map(card => {
-      const title = card.title.toLowerCase();
-      const description = card.description.toLowerCase();
-      const type = card.type.toLowerCase();
-      let score = 0;
-      
-      // Exact match gets highest score
-      if (title === query) score = 100;
-      // Starts with query gets high score
-      else if (title.startsWith(query)) score = 90;
-      // Contains query gets medium score
-      else if (title.includes(query)) score = 70;
-      // Description match gets lower score
-      else if (description.includes(query)) score = 50;
-      // Type match gets lowest score
-      else if (type.includes(query)) score = 30;
-      
-      // Bonus for consecutive character matches (fuzzy)
-      if (score > 0) {
-        let matchCount = 0;
-        let queryIndex = 0;
-        for (let i = 0; i < title.length && queryIndex < query.length; i++) {
-          if (title[i] === query[queryIndex]) {
-            matchCount++;
-            queryIndex++;
-          }
-        }
-        if (queryIndex === query.length) {
-          score += matchCount * 5; // Bonus for sequential matches
-        }
-      }
-      
-      return { ...card, score };
-    })
-    .filter(card => card.score! > 0)
-    .sort((a, b) => b.score! - a.score!);
-  });
+   readonly filteredCards = computed(() => {
+     const query = this.searchQuery().toLowerCase().trim();
+     if (!query) {
+       return TECH_CARDS.map(c => ({ ...c, score: 0 }));
+     }
+     
+     // Fuzzy search scoring
+     return TECH_CARDS.map(card => {
+       const title = card.title.toLowerCase();
+       const description = card.description.toLowerCase();
+       const type = card.type.toLowerCase();
+       let score = 0;
+       
+       // Exact match gets highest score
+       if (title === query) score = 100;
+       // Starts with query gets high score
+       else if (title.startsWith(query)) score = 90;
+       // Contains query gets medium score
+       else if (title.includes(query)) score = 70;
+       // Description match gets lower score
+       else if (description.includes(query)) score = 50;
+       // Type match gets lowest score
+       else if (type.includes(query)) score = 30;
+       
+       // Bonus for consecutive character matches (fuzzy)
+       if (score > 0) {
+         let matchCount = 0;
+         let queryIndex = 0;
+         for (let i = 0; i < title.length && queryIndex < query.length; i++) {
+           if (title[i] === query[queryIndex]) {
+             matchCount++;
+             queryIndex++;
+           }
+         }
+         if (queryIndex === query.length) {
+           score += matchCount * 5; // Bonus for sequential matches
+         }
+       }
+       
+       return { ...card, score };
+     })
+     .filter(card => card.score > 0)
+     .sort((a, b) => (b.score || 0) - (a.score || 0));
+   });
 
   hasFocusedWindow = computed(() => {
     return this.windowEntries().some(entry => entry.focused);
@@ -159,13 +262,13 @@ export class AppComponent {
     }
   }
 
-  ngOnDestroy(): void {
-    if (typeof window !== 'undefined') {
-      window.removeEventListener('mousemove', (e) => this.onMouseMove(e));
-      window.removeEventListener('mouseup', () => this.onMouseUp());
-      window.removeEventListener('keydown', (e) => this.onKeyDown(e));
-    }
-  }
+   ngOnDestroy(): void {
+     if (typeof window !== 'undefined') {
+       window.removeEventListener('mousemove', (e) => this.onMouseMove(e));
+       window.removeEventListener('mouseup', () => this.onMouseUp());
+       window.removeEventListener('keydown', (e) => this.onKeyDown(e));
+     }
+   };
 
   // Keyboard shortcuts
   onKeyDown(event: KeyboardEvent): void {
@@ -243,6 +346,76 @@ export class AppComponent {
 
   closeRightPanel(): void {
     this.selectedCard.set(null);
+  }
+
+  toggleAppInfo(): void {
+    this.showAppInfo.update(v => !v);
+  }
+
+  closeAppInfo(): void {
+    this.showAppInfo.set(false);
+  }
+
+  selectMainMenu(id: number): void {
+    this.selectedMainMenu.set(id);
+    this.selectedSupportMenu.set(null);
+  }
+
+  selectSupportMenu(id: number): void {
+    this.selectedSupportMenu.set(id);
+    this.selectedMainMenu.set(null);
+  }
+
+  getMainMenuName(id: number): string {
+    const names: { [key: number]: string } = {
+      1: 'Dashboard',
+      2: 'Files',
+      3: 'Users',
+      4: 'Settings',
+      5: 'Notifications',
+      6: 'Reports',
+    };
+    return names[id] || 'Main Menu';
+  }
+
+  getMainMenuIcon(id: number): string {
+    const icons: { [key: number]: string } = {
+      1: 'bar-chart-2',
+      2: 'folder',
+      3: 'users',
+      4: 'settings',
+      5: 'bell',
+      6: 'file-text',
+    };
+    return icons[id] || 'bar-chart-2';
+  }
+
+  getSupportMenuName(id: number): string {
+    const names: { [key: number]: string } = {
+      1: 'Help',
+      2: 'Contact',
+      3: 'Documentation',
+      4: 'Updates',
+    };
+    return names[id] || 'Support';
+  }
+
+  getSupportMenuIcon(id: number): string {
+    const icons: { [key: number]: string } = {
+      1: 'help-circle',
+      2: 'message-square',
+      3: 'book',
+      4: 'plus-square',
+    };
+    return icons[id] || 'help-circle';
+  }
+
+  onMenuSearchChange(): void {
+    // The search is handled by the computed properties automatically
+  }
+
+  clearMenuSearch(): void {
+    this.menuSearchQuery.set('');
   }
 
   // Resizing logic
@@ -375,25 +548,26 @@ export class AppComponent {
           ? 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)'
           : 'linear-gradient(135deg, #00b09b 0%, #96c93d 100%)';
 
-      const box = new WinBoxConstructor({
-        id: windowId,
-        title: title,
-        background,
-        width: `${windowWidth}px`,
-        height: `${windowHeight}px`,
-        x: `${x}px`,
-        y: `${y}px`,
-        minwidth: 350,
-        minheight: type === 'auth' ? 450 : 400,
-        maxwidth: 800,
-        maxheight: 700,
-        html: this.getWindowHtml(type, card),
-        controls: {
-          minimize: true,
-          maximize: true,
-          close: true,
-        },
-      });
+       const box = new WinBoxConstructor({
+         id: windowId,
+         title: title,
+         background,
+         width: `${windowWidth}px`,
+         height: `${windowHeight}px`,
+         x: `${x}px`,
+         y: `${y}px`,
+         minwidth: 350,
+         minheight: type === 'auth' ? 450 : 400,
+         maxwidth: 800,
+         maxheight: 700,
+         html: this.getWindowHtml(type, card),
+         controls: {
+           minimize: true,
+           maximize: true,
+           close: true,
+         },
+         maximized: true,
+       });
 
       if (!box) {
         return;

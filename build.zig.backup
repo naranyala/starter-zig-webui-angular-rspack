@@ -5,13 +5,10 @@ pub fn build(b: *std.Build) void {
     const optimize = b.standardOptimizeOption(.{});
 
     // WebUI static library
-    const webui_lib = b.addLibrary(.{
+    const webui_lib = b.addStaticLibrary(.{
         .name = "webui",
-        .linkage = .static,
-        .root_module = b.createModule(.{
-            .target = target,
-            .optimize = optimize,
-        }),
+        .target = target,
+        .optimize = optimize,
     });
 
     // Add webui C source files
@@ -99,13 +96,10 @@ pub fn build(b: *std.Build) void {
     run_step.dependOn(&run_cmd.step);
 
     // Test step - tests are embedded in source files via @test decls
-    const test_module = b.createModule(.{
+    const exe_unit_tests = b.addTest(.{
         .root_source_file = b.path("src/main.zig"),
         .target = target,
         .optimize = optimize,
-    });
-    const exe_unit_tests = b.addTest(.{
-        .root_module = test_module,
     });
 
     const run_exe_unit_tests = b.addRunArtifact(exe_unit_tests);

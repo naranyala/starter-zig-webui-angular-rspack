@@ -1,111 +1,83 @@
 <div class="app-container">
-  <!-- TOP TOOLBAR - Breadcrumbs Only -->
-  <header class="toolbar">
-    <div class="toolbar__left">
-      <div class="toolbar__breadcrumb">
-        @for (crumb of breadcrumbs(); track crumb.label; let last = $last) {
-          @if (last) {
-            <span class="toolbar__breadcrumb__item active">
-              {{ crumb.icon }} {{ crumb.label }}
-            </span>
-          } @else {
-            <span class="toolbar__breadcrumb__item">
-              {{ crumb.icon }} {{ crumb.label }}
-            </span>
-            <span class="toolbar__breadcrumb__separator">›</span>
-          }
-        }
-      </div>
-    </div>
-
-    <div class="toolbar__center">
-      <div class="toolbar__search">
-        <span class="toolbar__search__icon">🔍</span>
-        <input
-          type="text"
-          class="toolbar__search__input"
-          placeholder="Search applications..."
-          [value]="searchQuery()"
-          (input)="onSearchChange($event)"
-        />
-        @if (searchQuery()) {
-          <button class="toolbar__search__clear" (click)="clearSearch()">✕</button>
-        }
-      </div>
-    </div>
-
-    <div class="toolbar__right">
-      <button class="toolbar__btn toolbar__btn--icon" (click)="closeAllWindows()" title="Close all windows">
-        <span class="toolbar__icon">✕</span>
-      </button>
-    </div>
-  </header>
-
   <!-- MAIN CONTENT with Two Columns -->
   <main class="main-container">
-    <!-- MIDDLE COLUMN - Content/List View with Fuzzy Search -->
+    <!-- MIDDLE COLUMN - Grid Menu Layout -->
     <section class="column column--middle" [style.flex-basis]="middleColumnSize() + '%'">
-      <div class="column__header">
-        <div class="column__title">
-          <span class="column__icon">📱</span>
-          <span class="column__label">Applications</span>
-          @if (searchQuery()) {
-            <span class="column__split-indicator">{{ filteredCards().length }} results</span>
+      <div class="column__content column__content--scrollable">
+        <!-- Search Section -->
+        <div class="menu-search-section">
+          <input type="text"
+                 class="menu-search-input"
+                 placeholder="Search menu items..."
+                 [(ngModel)]="menuSearchQuery"
+                 (input)="onMenuSearchChange()">
+          <lucide-angular name="search" class="menu-search-icon"></lucide-angular>
+          @if (menuSearchQuery()) {
+            <button type="button" class="menu-search-clear" (click)="clearMenuSearch()">
+              <lucide-angular name="x" class="menu-search-icon"></lucide-angular>
+            </button>
           }
         </div>
-        <div class="column__actions">
-          <button class="column__action-btn" (click)="toggleViewMode()" title="Toggle view">
-            {{ viewMode() === 'grid' ? '☰' : '▦' }}
-          </button>
+        
+        <!-- Top Section with Menu Counts -->
+        <div class="menu-counts">
+          <div class="menu-count-item">
+            <span class="menu-count-label">Main Menu</span>
+            <span class="menu-count-value">{{ filteredMainMenu().length }}</span>
+          </div>
+          <div class="menu-count-divider">|</div>
+          <div class="menu-count-item">
+            <span class="menu-count-label">Support</span>
+            <span class="menu-count-value">{{ filteredSupportMenu().length }}</span>
+          </div>
+        </div>
+        
+        <!-- Main Menu Grid Group -->
+        <div class="menu-grid-group">
+          <div class="menu-grid-header">
+            <lucide-angular name="home" class="menu-grid-icon"></lucide-angular>
+            <span class="menu-grid-title">Main Menu</span>
+          </div>
+          <div class="menu-grid">
+             @for (item of filteredMainMenu(); track item.value) {
+               <button type="button" class="grid-menu-item" (click)="selectMainMenu(item.value)" [class.selected]="selectedMainMenu() === item.value">
+                 <lucide-angular [name]="getMainMenuIcon(item.value)" class="grid-menu-icon"></lucide-angular>
+                 <span class="grid-menu-label">{{ item.label }}</span>
+               </button>
+             }
+          </div>
+        </div>
+        
+        <!-- Support Menu Grid Group -->
+        <div class="menu-grid-group">
+          <div class="menu-grid-header">
+            <lucide-angular name="settings" class="menu-grid-icon"></lucide-angular>
+            <span class="menu-grid-title">Support</span>
+          </div>
+          <div class="menu-grid">
+             @for (item of filteredSupportMenu(); track item.value) {
+               <button type="button" class="grid-menu-item" (click)="selectSupportMenu(item.value)" [class.selected]="selectedSupportMenu() === item.value">
+                 <lucide-angular [name]="getSupportMenuIcon(item.value)" class="grid-menu-icon"></lucide-angular>
+                 <span class="grid-menu-label">{{ item.label }}</span>
+               </button>
+             }
+          </div>
         </div>
       </div>
-
-      <div class="column__content column__content--scrollable">
-        @if (viewMode() === 'grid') {
-          <div class="grid-view">
-            @for (card of filteredCards(); track card.id) {
-              <button class="grid-item" (click)="selectCard(card)" [class.selected]="selectedCard()?.id === card.id">
-                <div class="grid-item__icon" [style.background]="card.color">
-                  {{ card.icon }}
-                </div>
-                <span class="grid-item__label">{{ card.title }}</span>
-                <span class="grid-item__description">{{ card.description }}</span>
-                @if (card.score) {
-                  <span class="grid-item__score">{{ card.score }}</span>
-                }
-              </button>
-            }
-            @if (filteredCards().length === 0) {
-              <div class="empty-state">
-                <span class="empty-state__icon">🔍</span>
-                <span class="empty-state__text">No items found</span>
-                @if (searchQuery()) {
-                  <span class="empty-state__hint">Try a different search term</span>
-                }
-              </div>
-            }
-          </div>
-        } @else {
-          <div class="list-view">
-            <div class="list-header">
-              <span class="list-header__item list-header__item--name">Name</span>
-              <span class="list-header__item list-header__item--type">Type</span>
-              <span class="list-header__item list-header__item--date">Date</span>
-              <span class="list-header__item list-header__item--score">Score</span>
-            </div>
-            @for (card of filteredCards(); track card.id) {
-              <button class="list-item" (click)="selectCard(card)" [class.selected]="selectedCard()?.id === card.id">
-                <span class="list-item__icon">{{ card.icon }}</span>
-                <span class="list-item__name">{{ card.title }}</span>
-                <span class="list-item__type">{{ card.type }}</span>
-                <span class="list-item__date">{{ card.date }}</span>
-                @if (card.score) {
-                  <span class="list-item__score">{{ card.score }}</span>
-                }
-              </button>
-            }
-          </div>
-        }
+      
+      <!-- Bottom Fixed Panel for First Column -->
+      <div class="column__footer">
+        <div class="footer-context">
+          <span class="footer-context__label">Zig WebUI Angular</span>
+        </div>
+        <div class="footer-actions">
+          <button type="button" class="footer-action-btn" (click)="toggleLayoutMode()" title="Switch Layout">
+            {{ layoutMode() === 'main-left' ? '◀ ▶' : '▶ ▶' }}
+          </button>
+          <button type="button" class="footer-action-btn" (click)="toggleAppInfo()" title="App Info">
+            ℹ️
+          </button>
+        </div>
       </div>
     </section>
 
@@ -117,123 +89,80 @@
       </div>
     </div>
 
-    <!-- RIGHT COLUMN - Preview/Detail View -->
-    <section class="column column--right" [style.flex-basis]="rightColumnSize() + '%'">
-      <div class="column__header">
-        <div class="column__title">
-          <span class="column__icon">👁️</span>
-          <span class="column__label">Preview</span>
-        </div>
-        <div class="column__actions">
-          @if (selectedCard()) {
-            <button class="column__action-btn" (click)="openCardWindow(selectedCard()!)" title="Open in window">
-              🚀
-            </button>
-          }
+    <!-- RIGHT COLUMN - Centered Icon with Long Dummy Text -->
+    <section class="column column--right" [class.has-selection]="selectedCard()" [style.flex-basis]="rightColumnSize() + '%'">
+      <div class="column__content column__content--scrollable">
+         <!-- Top Section with Menu Title -->
+         <div class="menu-title-section">
+           <lucide-angular name="list" class="menu-title-icon"></lucide-angular>
+           <span class="menu-title-text">
+             {{ selectedMainMenu() ? getMainMenuName(selectedMainMenu()!) : 
+                selectedSupportMenu() ? getSupportMenuName(selectedSupportMenu()!) : 'Menu Items' }}
+           </span>
+         </div>
+        
+        <!-- Centered Content Area with Icon and Long Dummy Text -->
+        <div class="centered-content-area">
+          <div class="main-icon">
+            <span>{{ menuItems().icon }}</span>
+          </div>
+          <div class="dummy-text-block">
+            <p>
+              Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. 
+              Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. 
+              Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. 
+              Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.
+            </p>
+            <p>
+              Sed ut perspiciatis unde omnis iste natus error sit voluptatem accusantium doloremque laudantium, totam rem aperiam, 
+              eaque ipsa quae ab illo inventore veritatis et quasi architecto beatae vitae dicta sunt explicabo.
+            </p>
+            <p>
+              Nemo enim ipsam voluptatem quia voluptas sit aspernatur aut odit aut fugit, sed quia consequuntur magni dolores 
+              eos qui ratione voluptatem sequi nesciunt. Neque porro quisquam est, qui dolorem ipsum quia dolor sit amet, 
+              consectetur, adipisci velit.
+            </p>
+          </div>
         </div>
       </div>
-
-      <div class="column__content column__content--scrollable">
-        @if (selectedCard()) {
-          <div class="preview-panel">
-            <div class="preview-panel__icon" [style.background]="selectedCard()!.color">
-              {{ selectedCard()!.icon }}
-            </div>
-            <h3 class="preview-panel__title">{{ selectedCard()!.title }}</h3>
-            <p class="preview-panel__description">{{ selectedCard()!.description }}</p>
-
-            <div class="preview-panel__info">
-              <div class="info-row">
-                <span class="info-row__label">Type:</span>
-                <span class="info-row__value">{{ selectedCard()!.type }}</span>
-              </div>
-              <div class="info-row">
-                <span class="info-row__label">Date:</span>
-                <span class="info-row__value">{{ selectedCard()!.date }}</span>
-              </div>
-              <div class="info-row">
-                <span class="info-row__label">Status:</span>
-                <span class="info-row__value status-active">Active</span>
-              </div>
-              @if (selectedCard()!.score) {
-                <div class="info-row">
-                  <span class="info-row__label">Search Score:</span>
-                  <span class="info-row__value score-badge">{{ selectedCard()!.score }}</span>
-                </div>
-              }
-            </div>
-
-            <div class="preview-panel__actions">
-              <button class="btn btn--primary" (click)="openCardWindow(selectedCard()!)">
-                <span class="btn__icon">🚀</span>
-                <span class="btn__label">Open Window</span>
-              </button>
-            </div>
-
-            <div class="preview-panel__quick-actions">
-              <h4 class="quick-actions__title">Quick Actions</h4>
-              <div class="quick-actions__grid">
-                <button class="quick-action" title="Share">
-                  <span class="quick-action__icon">📤</span>
-                  <span class="quick-action__label">Share</span>
-                </button>
-                <button class="quick-action" title="Copy">
-                  <span class="quick-action__icon">📋</span>
-                  <span class="quick-action__label">Copy</span>
-                </button>
-                <button class="quick-action" title="Tag">
-                  <span class="quick-action__icon">🏷️</span>
-                  <span class="quick-action__label">Tag</span>
-                </button>
-                <button class="quick-action" title="Delete">
-                  <span class="quick-action__icon">🗑️</span>
-                  <span class="quick-action__label">Delete</span>
-                </button>
-              </div>
-            </div>
-          </div>
-        } @else {
-          <div class="empty-preview">
-            <span class="empty-preview__icon">👈</span>
-            <span class="empty-preview__text">Select an item to preview</span>
-            <div class="empty-preview__tips">
-              <p>💡 Press <kbd class="kbd">Cmd</kbd> + <kbd class="kbd">K</kbd> to search</p>
-              <p>🔍 Type to filter cards with fuzzy search</p>
-              <p>📊 Results sorted by relevance score</p>
-            </div>
-          </div>
-        }
+      
+      <!-- Bottom Fixed Panel for Second Column -->
+      <div class="column__footer">
+        <div class="footer-context">
+          <span class="footer-context__label">{{ menuItems().title }}</span>
+          <span class="footer-context__count">1</span>
+        </div>
+        <div class="footer-actions">
+          <button type="button" class="footer-action-btn" (click)="closeRightPanel()" title="Close panel">
+            ✕
+          </button>
+          <button type="button" class="footer-action-btn" (click)="toggleAppInfo()" title="Info">
+            ℹ️
+          </button>
+        </div>
       </div>
     </section>
   </main>
 
-  <!-- STATUS BAR -->
-  <footer class="status-bar">
-    <div class="status-bar__left">
-      <span class="status-bar__item">
-        <span class="status-indicator connected"></span>
-        <span class="status-bar__label">Connected</span>
-      </span>
-      <span class="status-bar__item">
-        <span class="status-bar__label">Items:</span>
-        <span class="status-bar__value">{{ filteredCards().length }}</span>
-      </span>
-    </div>
-    <div class="status-bar__center">
-      <span class="status-bar__hint">Drag splitters to resize columns</span>
-    </div>
-    <div class="status-bar__right">
-      <span class="status-bar__item">
-        <span class="status-bar__label">Windows:</span>
-        <span class="status-bar__value">{{ windowEntries().length }}</span>
-      </span>
-      <span class="status-bar__item">
-        <span class="status-bar__label">Zoom:</span>
-        <span class="status-bar__value">100%</span>
-      </span>
-    </div>
-  </footer>
-
   <!-- Window Layer for WinBox -->
   <div class="window-layer"></div>
+  
+  <!-- Mobile backdrop for preview panel -->
+  <div class="mobile-backdrop" [class.visible]="selectedCard()" (click)="closeRightPanel()"></div>
+  
+  <!-- App Info Panel -->
+  <div class="app-info-panel" [class.visible]="showAppInfo()" (click)="closeAppInfo()">
+    <div class="app-info-content" (click)="$event.stopPropagation()">
+      <div class="app-info-header">
+        <h3>📱 Zig WebUI Angular Rspack</h3>
+        <button type="button" class="close-btn" (click)="toggleAppInfo()">✕</button>
+      </div>
+      <div class="app-info-body">
+        <p><strong>Version:</strong> 1.0.0</p>
+        <p><strong>Framework:</strong> Angular 21 + Zig</p>
+        <p><strong>Communication:</strong> WebUI WebSocket Bridge</p>
+        <p><strong>Items:</strong> {{ filteredCards().length }} applications</p>
+      </div>
+    </div>
+  </div>
 </div>

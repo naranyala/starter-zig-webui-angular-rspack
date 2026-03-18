@@ -1,5 +1,7 @@
 
 .zig-cache
+zig-out/
 
 frontend/node_modules/
-zig-out/
+frontend/dist
+frontend/.angular
