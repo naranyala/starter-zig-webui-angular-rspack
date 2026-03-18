@@ -3,7 +3,7 @@
 
 import { Component, signal, inject, OnInit, computed } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { DevToolsService } from '../../core/devtools.service';
+import { DevToolsService, type LogEntry, type ErrorReport } from '../../core/devtools.service';
 
 @Component({
   selector: 'app-devtools',
@@ -583,7 +583,7 @@ export class DevtoolsComponent implements OnInit {
 
   activeTab = signal<'stats' | 'logs' | 'errors' | 'metrics' | 'actions'>('stats');
 
-  readonly tabs: { id: 'stats' | 'logs' | 'errors' | 'metrics' | 'actions'; label: string; icon: string }[] = [
+  tabs: { id: 'stats' | 'logs' | 'errors' | 'metrics' | 'actions'; label: string; icon: string }[] = [
     { id: 'stats', label: 'Statistics', icon: '📊' },
     { id: 'logs', label: 'Logs', icon: '📝' },
     { id: 'errors', label: 'Errors', icon: '⚠' },

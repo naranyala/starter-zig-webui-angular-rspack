@@ -1,6 +1,7 @@
 import { CommonModule } from '@angular/common';
 import { Component, EventEmitter, Input, Output } from '@angular/core';
 import type { RootErrorState } from '../../core/global-error.service';
+import { ErrorCode } from '../../types';
 
 @Component({
   selector: 'app-error-modal',
@@ -383,32 +384,32 @@ export class ErrorModalComponent {
   @Input() error: RootErrorState | null = null;
   @Output() dismissed = new EventEmitter<void>();
 
-  getErrorIcon(code: string): string {
+  getErrorIcon(code: ErrorCode): string {
     switch (code) {
-      case 'VALIDATION_FAILED':
+      case ErrorCode.ValidationFailed:
         return '!';
-      case 'RESOURCE_NOT_FOUND':
-      case 'USER_NOT_FOUND':
-      case 'ENTITY_NOT_FOUND':
+      case ErrorCode.ResourceNotFound:
+      case ErrorCode.UserNotFound:
+      case ErrorCode.EntityNotFound:
         return '?';
-      case 'DB_ALREADY_EXISTS':
+      case ErrorCode.DbAlreadyExists:
         return 'DB';
-      case 'DB_CONNECTION_FAILED':
-      case 'DB_QUERY_FAILED':
-      case 'DB_CONSTRAINT_VIOLATION':
+      case ErrorCode.DbConnectionFailed:
+      case ErrorCode.DbQueryFailed:
+      case ErrorCode.DbConstraintViolation:
         return 'DB';
-      case 'CONFIG_NOT_FOUND':
-      case 'CONFIG_INVALID':
-      case 'CONFIG_MISSING_FIELD':
+      case ErrorCode.ConfigNotFound:
+      case ErrorCode.ConfigInvalid:
+      case ErrorCode.ConfigMissingField:
         return 'CFG';
-      case 'SERIALIZATION_FAILED':
-      case 'DESERIALIZATION_FAILED':
-      case 'INVALID_FORMAT':
+      case ErrorCode.SerializationFailed:
+      case ErrorCode.DeserializationFailed:
+      case ErrorCode.InvalidFormat:
         return 'ERR';
-      case 'INTERNAL_ERROR':
-      case 'LOCK_POISONED':
+      case ErrorCode.InternalError:
+      case ErrorCode.LockPoisoned:
         return 'ERR';
-      case 'UNKNOWN':
+      case ErrorCode.Unknown:
         return '?';
       default:
         return 'X';
@@ -426,11 +427,11 @@ export class ErrorModalComponent {
     }
   }
 
-  formatTimestamp(timestamp: string): string {
+  formatTimestamp(timestamp: number | string): string {
     try {
       return new Date(timestamp).toLocaleString();
     } catch {
-      return timestamp;
+      return String(timestamp);
     }
   }
 

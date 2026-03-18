@@ -1,6 +1,6 @@
 // Multi-channel communication service for backend-frontend communication
 // Supports: WebUI Bridge, Event Bus, Shared State, Message Queue, Broadcast
-import { Injectable, signal, computed, effect, inject } from '@angular/core';
+import { Injectable, signal, computed, inject } from '@angular/core';
 import { ApiService } from './api.service';
 
 // ============================================================================
@@ -159,8 +159,7 @@ export class CommunicationService {
    * Get event history from backend
    */
   async getEventHistory(): Promise<Message[]> {
-    const response = await this.api.call<Message[]>('devtools.getLogs');
-    return response.success ? response.data ?? [] : [];
+    return this.api.callOrThrow<Message[]>('devtools.getLogs').catch(() => []);
   }
 
   // ============================================================================
@@ -322,24 +321,21 @@ export class CommunicationService {
 
   private setupEventListeners(): void {
     // Listen for backend events
-    window.addEventListener('backend-event', ((event: Event) => {
-      const customEvent = event as CustomEvent<{ event: string; data: unknown }>;
-      const { event: eventName, data } = customEvent.detail;
+    window.addEventListener('backend-event', ((event: CustomEvent) => {
+      const { event: eventName, data } = event.detail;
       this.emit(eventName, data);
     }) as EventListener);
 
     // Listen for state updates
-    window.addEventListener('state-update', ((event: Event) => {
-      const customEvent = event as CustomEvent<{ key: string; value: unknown }>;
-      const { key, value } = customEvent.detail;
+    window.addEventListener('state-update', ((event: CustomEvent) => {
+      const { key, value } = event.detail;
       this.sharedState.update(state => ({ ...state, [key]: value }));
       this.stateHandlers.forEach(handler => handler(key, value));
     }) as EventListener);
 
     // Listen for broadcast messages
-    window.addEventListener('broadcast-message', ((event: Event) => {
-      const customEvent = event as CustomEvent<{ event: string; data: unknown }>;
-      const { event: eventName, data } = customEvent.detail;
+    window.addEventListener('broadcast-message', ((event: CustomEvent) => {
+      const { event: eventName, data } = event.detail;
       this.emit('broadcast', { event: eventName, data });
     }) as EventListener);
   }

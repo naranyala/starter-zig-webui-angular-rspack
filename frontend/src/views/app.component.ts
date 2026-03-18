@@ -1,8 +1,8 @@
 import { CommonModule } from '@angular/common';
-import { Component, computed, inject, signal, provideEnvironmentInitializer } from '@angular/core';
-import { FormsModule } from '@angular/forms';
+import { Component, computed, inject, signal } from '@angular/core';
 import { WinBoxService, type WinBoxInstance } from '../core/winbox.service';
-import { LucideAngularModule, LucideIconProvider, LUCIDE_ICONS, icons } from 'lucide-angular';
+import { LucideAngularModule } from 'lucide-angular';
+import { provideLucideIcons, Home, Lock, Database, Settings, Folder, Eye, Search, X, Rocket, Share2, Copy, Tag, Trash2, Menu, Grid, BarChart2, Globe, Info, Maximize2, Minimize2, FileText, Activity } from '../core/lucide-icons.provider';
 
 export interface NavItem {
   id: string;
@@ -30,55 +30,42 @@ export interface WindowEntry {
 }
 
 export type ViewMode = 'grid' | 'list';
-export type AppView = 'home' | 'auth' | 'sqlite' | 'devtools';
+export type AppView = 'home' | 'auth' | 'sqlite' | 'devtools' | 'settings' | 'help' | 'about';
+export type ThirdPanelView = 'details' | 'activity';
+
+export interface MenuGroup {
+  label: string;
+  items: NavItem[];
+}
 
 const TECH_CARDS: Card[] = [
-  { id: 1, title: 'Authentication', description: 'Login & Register', icon: 'lock', color: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', type: 'Feature', date: '2026-03-16' },
-  { id: 2, title: 'SQLite CRUD', description: 'Database Operations', icon: 'database', color: 'linear-gradient(135deg, #00b09b 0%, #96c93d 100%)', type: 'Feature', date: '2026-03-16' },
-  { id: 3, title: 'DevTools', description: 'Debugging Tools', icon: 'tool', color: 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)', type: 'Tool', date: '2026-03-15' },
-  { id: 4, title: 'System Info', description: 'System Monitoring', icon: 'bar-chart-2', color: 'linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)', type: 'Monitor', date: '2026-03-15' },
-  { id: 5, title: 'Network', description: 'Network Stats', icon: 'globe', color: 'linear-gradient(135deg, #43e97b 0%, #38f9d7 100%)', type: 'Monitor', date: '2026-03-14' },
-  { id: 6, title: 'Processes', description: 'Process Manager', icon: 'settings', color: 'linear-gradient(135deg, #fa709a 0%, #fee140 100%)', type: 'Tool', date: '2026-03-14' },
+   { id: 1, title: 'Authentication', description: 'Login & Register', icon: 'Lock', color: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', type: 'Feature', date: '2026-03-16' },
+   { id: 2, title: 'SQLite CRUD', description: 'Database Operations', icon: 'Database', color: 'linear-gradient(135deg, #00b09b 0%, #96c93d 100%)', type: 'Feature', date: '2026-03-16' },
+   { id: 3, title: 'DevTools', description: 'Debugging Tools', icon: 'Settings', color: 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)', type: 'Tool', date: '2026-03-15' },
+   { id: 4, title: 'System Info', description: 'System Monitoring', icon: 'BarChart2', color: 'linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)', type: 'Monitor', date: '2026-03-15' },
+   { id: 5, title: 'Network', description: 'Network Stats', icon: 'Globe', color: 'linear-gradient(135deg, #43e97b 0%, #38f9d7 100%)', type: 'Monitor', date: '2026-03-14' },
+   { id: 6, title: 'Processes', description: 'Process Manager', icon: 'Settings', color: 'linear-gradient(135deg, #fa709a 0%, #fee140 100%)', type: 'Tool', date: '2026-03-14' },
 ];
 
 @Component({
   selector: 'app-root',
   standalone: true,
-  imports: [CommonModule, FormsModule, LucideAngularModule],
-  providers: [
-    { provide: LUCIDE_ICONS, multi: true, useValue: new LucideIconProvider(icons) },
-  ],
+  imports: [CommonModule, LucideAngularModule],
+  providers: [...provideLucideIcons()],
   templateUrl: './app.component.html',
-  styleUrls: ['./app.component.css'],
+  styleUrl: './app.component.css',
 })
 export class AppComponent {
   private readonly winboxService = inject(WinBoxService);
 
-  // Column sizes (percentages, must sum to 100)
-  readonly leftColumnSize = signal(25); // Left column (menu)
-  readonly middleColumnSize = signal(25); // Middle column (content)
-  readonly rightColumnSize = signal(75); // Right column (content)
-  
-  // Toggle layout mode
-  toggleLayoutMode(): void {
-    const currentMode = this.layoutMode();
-    const newMode = currentMode === 'main-left' ? 'main-right' : 'main-left';
-    this.layoutMode.set(newMode);
-    
-    // Update column sizes based on layout mode
-    if (newMode === 'main-left') {
-      // Left column 25%, Right column 75%
-      this.leftColumnSize.set(25);
-      this.rightColumnSize.set(75);
-    } else {
-      // Left column 75%, Right column 25%
-      this.leftColumnSize.set(75);
-      this.rightColumnSize.set(25);
-    }
-  }
-  
+  // Column size (percentage) for the left column (basis in flex: 0 0 leftColumnSize%)
+  readonly leftColumnSize = signal(25); // Default 25% for left column
+
+  // Computed right column percentage (remaining space)
+  readonly rightColumnSize = computed(() => 100 - this.leftColumnSize());
+
   // Column collapsed state
-  readonly leftColumnCollapsed = signal(true); // Always collapsed
+  readonly leftColumnCollapsed = signal(false); // Visible by default
 
   // Navigation state
   readonly activeNavigation = signal<string>('favorites');
@@ -87,99 +74,117 @@ export class AppComponent {
   readonly viewMode = signal<ViewMode>('grid');
   readonly selectedCard = signal<Card | null>(null);
   readonly fuzzySearchActive = signal(false);
-  readonly showAppInfo = signal(false);
-  
-  // Layout mode for switching between main-left and main-right
-  readonly layoutMode = signal<'main-left' | 'main-right'>('main-left');
-  
-  // Menu search
-  readonly menuSearchQuery = signal('');
-
-  // Menu selection state
-  readonly selectedMainMenu = signal<number | null>(null);
-  readonly selectedSupportMenu = signal<number | null>(null);
-
-   // Menu items definition
-   readonly mainMenuItems = [
-     { icon: 'chart-column', label: 'Dashboard', value: 1 },
-     { icon: 'folder', label: 'Files', value: 2 },
-     { icon: 'users', label: 'Users', value: 3 },
-     { icon: 'settings', label: 'Settings', value: 4 },
-     { icon: 'bell', label: 'Notifications', value: 5 },
-     { icon: 'file-text', label: 'Reports', value: 6 },
-   ];
-
-   readonly supportMenuItems = [
-     { icon: 'circle-question-mark', label: 'Help', value: 1 },
-     { icon: 'message-square', label: 'Contact', value: 2 },
-     { icon: 'book', label: 'Documentation', value: 3 },
-     { icon: 'square-plus', label: 'Updates', value: 4 },
-   ];
-  
-  // Filtered menu items based on search
-  readonly filteredMainMenu = computed(() => {
-    const query = this.menuSearchQuery().toLowerCase();
-    if (!query) {
-      return this.mainMenuItems;
-    }
-    return this.mainMenuItems.filter(item => item.label.toLowerCase().includes(query));
-  });
-  
-  readonly filteredSupportMenu = computed(() => {
-    const query = this.menuSearchQuery().toLowerCase();
-    if (!query) {
-      return this.supportMenuItems;
-    }
-    return this.supportMenuItems.filter(item => item.label.toLowerCase().includes(query));
-  });
-  
-   // Reactive menu item for second column based on selection
-   readonly menuItems = computed(() => {
-     const mainId = this.selectedMainMenu();
-     const supportId = this.selectedSupportMenu();
-
-     if (mainId === 1) {
-       return { icon: 'chart-column', title: 'Overview Dashboard' };
-     }
-     if (mainId === 2) {
-       return { icon: 'folder', title: 'File Manager' };
-     }
-     if (mainId === 3) {
-       return { icon: 'user', title: 'User Management' };
-     }
-     if (mainId === 4) {
-       return { icon: 'settings', title: 'System Settings' };
-     }
-     if (mainId === 5) {
-       return { icon: 'bell', title: 'Notification Center' };
-     }
-     if (mainId === 6) {
-       return { icon: 'file-text', title: 'Reports Dashboard' };
-     }
-     if (supportId === 1) {
-       return { icon: 'circle-question-mark', title: 'Help Center' };
-     }
-     if (supportId === 2) {
-       return { icon: 'message-square', title: 'Contact Support' };
-     }
-     if (supportId === 3) {
-       return { icon: 'book', title: 'Documentation' };
-     }
-     if (supportId === 4) {
-       return { icon: 'refresh-cw', title: 'Updates & Changes' };
-     }
-
-     // Default state when nothing is selected
-     return { icon: 'list', title: 'Select a menu item' };
-   });
 
   // Window management
   readonly windowEntries = signal<WindowEntry[]>([]);
 
-  // Breadcrumb navigation
-  readonly breadcrumbs = signal<{ label: string; icon: string }[]>([
-    { label: 'Home', icon: '🏠' },
+  // Menu counts
+  readonly mainMenuCount = signal(4);
+  readonly supportMenuCount = signal(3);
+
+  // Fuzzy search scoring function
+  private fuzzyScore(text: string, query: string): number {
+    const lowerText = text.toLowerCase();
+    const lowerQuery = query.toLowerCase();
+    
+    if (lowerText === lowerQuery) return 100;
+    if (lowerText.startsWith(lowerQuery)) return 80;
+    if (lowerText.includes(lowerQuery)) return 60;
+    
+    let score = 0;
+    let queryIndex = 0;
+    for (let i = 0; i < lowerText.length && queryIndex < lowerQuery.length; i++) {
+      if (lowerText[i] === lowerQuery[queryIndex]) {
+        score += 5;
+        queryIndex++;
+      }
+    }
+    return queryIndex === lowerQuery.length ? score : 0;
+  }
+
+  // Filtered menus based on search
+  readonly filteredMainMenus = computed<NavItem[]>(() => {
+    const query = this.searchQuery().trim();
+    if (!query) return this.mainMenus();
+    
+    return this.mainMenus()
+      .map(item => ({ item, score: this.fuzzyScore(item.label, query) }))
+      .filter(({ score }) => score > 0)
+      .sort((a, b) => b.score - a.score)
+      .map(({ item }) => item);
+  });
+
+  readonly filteredSupportMenus = computed<NavItem[]>(() => {
+    const query = this.searchQuery().trim();
+    if (!query) return this.supportMenus();
+    
+    return this.supportMenus()
+      .map(item => ({ item, score: this.fuzzyScore(item.label, query) }))
+      .filter(({ score }) => score > 0)
+      .sort((a, b) => b.score - a.score)
+      .map(({ item }) => item);
+  });
+
+  // Menu groups (original)
+  readonly mainMenus = computed<NavItem[]>(() => [
+    { id: 'home', label: 'Home', icon: 'Home' },
+    { id: 'auth', label: 'Auth', icon: 'Lock' },
+    { id: 'sqlite', label: 'SQLite', icon: 'Database' },
+    { id: 'devtools', label: 'DevTools', icon: 'Settings' },
   ]);
+
+  readonly supportMenus = computed<NavItem[]>(() => [
+    { id: 'settings', label: 'Settings', icon: 'Settings' },
+    { id: 'help', label: 'Help', icon: 'Info' },
+    { id: 'about', label: 'About', icon: 'Info' },
+  ]);
+
+  // Third panel state
+  readonly thirdPanelView = signal<ThirdPanelView>('details');
+
+  // Breadcrumb navigation
+  readonly breadcrumbs = signal<{ label: string; icon: any }[]>([
+    { label: 'Home', icon: Home },
+  ]);
+
+  // Lucide icons for direct use with [img] property
+  readonly icons: { [key: string]: any } = {
+    Home,
+    Lock,
+    Database,
+    Settings,
+    Folder,
+    Eye,
+    Search,
+    X,
+    Rocket,
+    Share2,
+    Copy,
+    Tag,
+    Trash2,
+    Menu,
+    Grid,
+    BarChart2,
+    Globe,
+    Info,
+    Maximize2,
+    Minimize2,
+    FileText,
+    Activity,
+  };
+
+  // Helper method to get icon by name
+  getIcon(name: string): any {
+    return this.icons[name] || this.icons.Home;
+  }
+
+  setActiveView(id: string): void {
+    this.activeView.set(id as AppView);
+  }
+
+  setThirdPanelView(view: ThirdPanelView): void {
+    this.thirdPanelView.set(view);
+  }
 
   private existingBoxes: WinBoxInstance[] = [];
   private authWindowId = 'auth-window-1';
@@ -187,55 +192,55 @@ export class AppComponent {
   private isResizing = false;
   private resizeStartX = 0;
   private resizeStartSize = 0;
-  private activeSplitter: 'left' | 'middle' | null = null;
+  private activeSplitter: 'left' | null = null;
 
   // Computed signals
   readonly navigationItems = computed(() => []);
   
-   readonly filteredCards = computed(() => {
-     const query = this.searchQuery().toLowerCase().trim();
-     if (!query) {
-       return TECH_CARDS.map(c => ({ ...c, score: 0 }));
-     }
-     
-     // Fuzzy search scoring
-     return TECH_CARDS.map(card => {
-       const title = card.title.toLowerCase();
-       const description = card.description.toLowerCase();
-       const type = card.type.toLowerCase();
-       let score = 0;
-       
-       // Exact match gets highest score
-       if (title === query) score = 100;
-       // Starts with query gets high score
-       else if (title.startsWith(query)) score = 90;
-       // Contains query gets medium score
-       else if (title.includes(query)) score = 70;
-       // Description match gets lower score
-       else if (description.includes(query)) score = 50;
-       // Type match gets lowest score
-       else if (type.includes(query)) score = 30;
-       
-       // Bonus for consecutive character matches (fuzzy)
-       if (score > 0) {
-         let matchCount = 0;
-         let queryIndex = 0;
-         for (let i = 0; i < title.length && queryIndex < query.length; i++) {
-           if (title[i] === query[queryIndex]) {
-             matchCount++;
-             queryIndex++;
-           }
-         }
-         if (queryIndex === query.length) {
-           score += matchCount * 5; // Bonus for sequential matches
-         }
-       }
-       
-       return { ...card, score };
-     })
-     .filter(card => card.score > 0)
-     .sort((a, b) => (b.score || 0) - (a.score || 0));
-   });
+  readonly filteredCards = computed(() => {
+    const query = this.searchQuery().toLowerCase().trim();
+    if (!query) {
+      return TECH_CARDS.map(c => ({ ...c, score: 0 }));
+    }
+    
+    // Fuzzy search scoring
+    return TECH_CARDS.map(card => {
+      const title = card.title.toLowerCase();
+      const description = card.description.toLowerCase();
+      const type = card.type.toLowerCase();
+      let score = 0;
+      
+      // Exact match gets highest score
+      if (title === query) score = 100;
+      // Starts with query gets high score
+      else if (title.startsWith(query)) score = 90;
+      // Contains query gets medium score
+      else if (title.includes(query)) score = 70;
+      // Description match gets lower score
+      else if (description.includes(query)) score = 50;
+      // Type match gets lowest score
+      else if (type.includes(query)) score = 30;
+      
+      // Bonus for consecutive character matches (fuzzy)
+      if (score > 0) {
+        let matchCount = 0;
+        let queryIndex = 0;
+        for (let i = 0; i < title.length && queryIndex < query.length; i++) {
+          if (title[i] === query[queryIndex]) {
+            matchCount++;
+            queryIndex++;
+          }
+        }
+        if (queryIndex === query.length) {
+          score += matchCount * 5; // Bonus for sequential matches
+        }
+      }
+      
+      return { ...card, score };
+    })
+    .filter(card => card.score! > 0)
+    .sort((a, b) => b.score! - a.score!);
+  });
 
   hasFocusedWindow = computed(() => {
     return this.windowEntries().some(entry => entry.focused);
@@ -265,13 +270,13 @@ export class AppComponent {
     }
   }
 
-   ngOnDestroy(): void {
-     if (typeof window !== 'undefined') {
-       window.removeEventListener('mousemove', (e) => this.onMouseMove(e));
-       window.removeEventListener('mouseup', () => this.onMouseUp());
-       window.removeEventListener('keydown', (e) => this.onKeyDown(e));
-     }
-   };
+  ngOnDestroy(): void {
+    if (typeof window !== 'undefined') {
+      window.removeEventListener('mousemove', (e) => this.onMouseMove(e));
+      window.removeEventListener('mouseup', () => this.onMouseUp());
+      window.removeEventListener('keydown', (e) => this.onKeyDown(e));
+    }
+  }
 
   // Keyboard shortcuts
   onKeyDown(event: KeyboardEvent): void {
@@ -351,114 +356,42 @@ export class AppComponent {
     this.selectedCard.set(null);
   }
 
-  toggleAppInfo(): void {
-    this.showAppInfo.update(v => !v);
+  showAppInfo(): void {
+    this.createWindow('app-info-window', 'App Info', 'generic', {
+      id: 0,
+      title: 'Application Info',
+      description: 'This is a two-column layout application.',
+      icon: 'Info',
+      color: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+      type: 'App',
+      date: new Date().toISOString().split('T')[0],
+    });
   }
 
-  closeAppInfo(): void {
-    this.showAppInfo.set(false);
-  }
-
-  selectMainMenu(id: number): void {
-    this.selectedMainMenu.set(id);
-    this.selectedSupportMenu.set(null);
-  }
-
-  selectSupportMenu(id: number): void {
-    this.selectedSupportMenu.set(id);
-    this.selectedMainMenu.set(null);
-  }
-
-  getMainMenuName(id: number): string {
-    const names: { [key: number]: string } = {
-      1: 'Dashboard',
-      2: 'Files',
-      3: 'Users',
-      4: 'Settings',
-      5: 'Notifications',
-      6: 'Reports',
-    };
-    return names[id] || 'Main Menu';
-  }
-
-  getMainMenuIcon(id: number): string {
-    const icons: { [key: number]: string } = {
-      1: 'chart-column',
-      2: 'folder',
-      3: 'users',
-      4: 'settings',
-      5: 'bell',
-      6: 'file-text',
-    };
-    return icons[id] || 'chart-column';
-  }
-
-  getSupportMenuName(id: number): string {
-    const names: { [key: number]: string } = {
-      1: 'Help',
-      2: 'Contact',
-      3: 'Documentation',
-      4: 'Updates',
-    };
-    return names[id] || 'Support';
-  }
-
-  getSupportMenuIcon(id: number): string {
-    const icons: { [key: number]: string } = {
-      1: 'circle-question-mark',
-      2: 'message-square',
-      3: 'book',
-      4: 'square-plus',
-    };
-    return icons[id] || 'circle-question-mark';
-  }
-
-  onMenuSearchChange(): void {
-    // The search is handled by the computed properties automatically
-  }
-
-  clearMenuSearch(): void {
-    this.menuSearchQuery.set('');
+  toggleColumnWidth(): void {
+    this.leftColumnSize.set(this.leftColumnSize() === 25 ? 75 : 25);
   }
 
   // Resizing logic
-  startResize(event: MouseEvent, splitter: 'left' | 'middle'): void {
+  startResize(event: MouseEvent): void {
     this.isResizing = true;
+    this.activeSplitter = 'left';
     this.resizeStartX = event.clientX;
-
-    if (splitter === 'left') {
-      this.activeSplitter = 'left';
-      this.resizeStartSize = this.leftColumnSize();
-    } else {
-      this.activeSplitter = 'middle';
-      this.resizeStartSize = this.middleColumnSize();
-    }
-
+    this.resizeStartSize = this.leftColumnSize();
     document.body.style.cursor = 'ew-resize';
     document.body.style.userSelect = 'none';
     event.preventDefault();
   }
 
   onMouseMove(event: MouseEvent): void {
-    if (!this.isResizing) return;
+    if (!this.isResizing || this.activeSplitter !== 'left') return;
 
     const deltaX = event.clientX - this.resizeStartX;
     const windowWidth = window.innerWidth;
     const deltaPercent = (deltaX / windowWidth) * 100;
 
-    if (this.activeSplitter === 'left') {
-      const newSize = Math.max(15, Math.min(30, this.resizeStartSize + deltaPercent));
-      this.leftColumnSize.set(newSize);
-      // Adjust middle column to compensate
-      const remaining = 100 - newSize - this.rightColumnSize();
-      this.middleColumnSize.set(Math.max(30, remaining));
-    } else if (this.activeSplitter === 'middle') {
-      const newSize = Math.max(30, Math.min(60, this.resizeStartSize + deltaPercent));
-      this.middleColumnSize.set(newSize);
-      // Adjust right column to compensate
-      const remaining = 100 - this.leftColumnSize() - newSize;
-      this.rightColumnSize.set(Math.max(20, remaining));
-    }
+    const newSize = Math.max(15, Math.min(85, this.resizeStartSize + deltaPercent));
+    this.leftColumnSize.set(newSize);
   }
 
   onMouseUp(): void {
@@ -555,10 +488,10 @@ export class AppComponent {
          id: windowId,
          title: title,
          background,
-         width: `${windowWidth}px`,
-         height: `${windowHeight}px`,
-         x: `${x}px`,
-         y: `${y}px`,
+         width: '100%',
+         height: '100%',
+         x: 0,
+         y: 0,
          minwidth: 350,
          minheight: type === 'auth' ? 450 : 400,
          maxwidth: 800,
@@ -569,7 +502,6 @@ export class AppComponent {
            maximize: true,
            close: true,
          },
-         maximized: true,
        });
 
       if (!box) {

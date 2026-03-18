@@ -1,16 +1,15 @@
 # Communication
 
-This document describes all communication approaches between backend and frontend.
+This document describes the communication approaches between backend and frontend.
 
 ## Overview
 
-The project supports **3 communication approaches**:
+The project uses **2 communication approaches** (NO HTTP/HTTPS):
 
 | # | Approach | Protocol | Use Case |
 |---|----------|----------|----------|
 | 1 | WebUI Bridge | WebSocket (via WebUI) | Standard RPC calls |
 | 2 | Pure WebSocket | WebSocket (ws://) | Real-time, pub/sub |
-| 3 | Event Bus | Internal | Backend internal messaging |
 
 ---
 

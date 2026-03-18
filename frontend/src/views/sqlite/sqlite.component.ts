@@ -101,15 +101,15 @@ export interface UserStats {
             <form class="user-form" (ngSubmit)="createUser()">
               <div class="form-group">
                 <label class="form-label">Name</label>
-                <input type="text" class="form-input" [ngModel]="newUser().name" (ngModelChange)="updateNewUserName($event)" name="name" required />
+                <input type="text" class="form-input" [ngModel]="newUserForm.name" (ngModelChange)="updateNewUser('name', $event)" name="name" required />
               </div>
               <div class="form-group">
                 <label class="form-label">Email</label>
-                <input type="email" class="form-input" [ngModel]="newUser().email" (ngModelChange)="updateNewUserEmail($event)" name="email" required />
+                <input type="email" class="form-input" [ngModel]="newUserForm.email" (ngModelChange)="updateNewUser('email', $event)" name="email" required />
               </div>
               <div class="form-group">
                 <label class="form-label">Age</label>
-                <input type="number" class="form-input" [ngModel]="newUser().age" (ngModelChange)="updateNewUserAge($event)" name="age" required min="1" max="150" />
+                <input type="number" class="form-input" [ngModel]="newUserForm.age" (ngModelChange)="updateNewUser('age', $event)" name="age" required min="1" max="150" />
               </div>
               <button type="submit" class="submit-button" [disabled]="isLoading()">
                 {{ isLoading() ? 'Creating...' : 'Create User' }}
@@ -173,16 +173,12 @@ export class SqliteCrudComponent {
 
   newUser = signal<Partial<User>>({ name: '', email: '', age: 25 });
 
-  updateNewUserName(name: string): void {
-    this.newUser.update(u => ({ ...u, name }));
+  get newUserForm() {
+    return this.newUser();
   }
 
-  updateNewUserEmail(email: string): void {
-    this.newUser.update(u => ({ ...u, email }));
-  }
-
-  updateNewUserAge(age: number): void {
-    this.newUser.update(u => ({ ...u, age }));
+  updateNewUser(field: keyof User, value: string | number) {
+    this.newUser.update(u => ({ ...u, [field]: value }));
   }
 
   setActiveTab(tab: 'list' | 'create'): void {
@@ -225,15 +221,14 @@ export class SqliteCrudComponent {
   }
 
   async createUser(): Promise<void> {
-    const user = this.newUser();
-    if (!user.name || !user.email || !user.age) {
+    if (!this.newUser().name || !this.newUser().email || !this.newUser().age) {
       this.notifications.error('Please fill in all fields');
       return;
     }
 
     this.isLoading.set(true);
     try {
-      await this.api.callOrThrow('createUser', [user]);
+      await this.api.callOrThrow('createUser', [this.newUser()]);
       this.notifications.success('User created successfully');
       this.newUser.set({ name: '', email: '', age: 25 });
       this.setActiveTab('list');

@@ -1,6 +1,6 @@
 // DevTools service for connecting to backend devtools API
 import { Injectable, signal, computed, inject } from '@angular/core';
-import { ApiService } from '../core/api.service';
+import { ApiService } from './api.service';
 
 export interface DevToolsStats {
   uptime_seconds: number;

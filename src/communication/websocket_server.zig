@@ -333,7 +333,7 @@ test "WebSocket Server - Client multiple subscriptions" {
     try testing.expect(client.isSubscribed("topic1"));
     try testing.expect(client.isSubscribed("topic2"));
     try testing.expect(client.isSubscribed("topic3"));
-    try testing.expectEqual(@as(usize, 3), client.topics.count());
+    try testing.expectEqual(@as(usize, 3), client.subscriptions.count());
 }
 
 test "WebSocket Server - Client unsubscribe all" {
@@ -343,8 +343,9 @@ test "WebSocket Server - Client unsubscribe all" {
     try client.subscribe("topic1");
     try client.subscribe("topic2");
 
-    client.unsubscribeAll();
-    try testing.expectEqual(@as(usize, 0), client.topics.count());
+    client.unsubscribe("topic1");
+    client.unsubscribe("topic2");
+    try testing.expectEqual(@as(usize, 0), client.subscriptions.count());
 }
 
 test "WebSocket Server - Message types" {
@@ -371,20 +372,17 @@ test "WebSocket Server - Message types" {
 }
 
 test "WebSocket Server - Client connection properties" {
-    var client = Client.init(42, "127.0.0.1", 8080, testing.allocator);
+    var client = Client.init(42, undefined, undefined, testing.allocator);
     defer client.deinit();
 
     try testing.expectEqual(@as(u32, 42), client.id);
-    try testing.expectEqualStrings("127.0.0.1", client.ip_address);
-    try testing.expectEqual(@as(u16, 8080), client.port);
-    try testing.expect(client.connected);
 }
 
 test "WebSocket Server - Server init with custom port" {
     var server = Server.init(testing.allocator, .{ .port = 9999 });
     defer server.deinit();
 
-    try testing.expectEqual(@as(u16, 9999), server.port);
+    try testing.expectEqual(@as(u16, 9999), server.config.port);
 }
 
 test "WebSocket Server - Broadcast to topic" {

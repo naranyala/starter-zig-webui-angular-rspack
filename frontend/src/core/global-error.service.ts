@@ -1,31 +1,35 @@
+// Global error service - stub for error state management
 import { Injectable, signal } from '@angular/core';
+import { ErrorValue, ErrorCode } from '../types';
 
 export interface RootErrorState {
   title: string;
   userMessage: string;
-  error: {
-    code: string;
-    message: string;
-    details?: string;
-    field?: string;
-    cause?: string;
-    context?: Record<string, string>;
-  };
-  source: string;
-  timestamp: string;
+  error: ErrorValue;
+  source?: string;
+  timestamp: number;
 }
 
 @Injectable({ providedIn: 'root' })
 export class GlobalErrorService {
-  private readonly currentError = signal<RootErrorState | null>(null);
+  private readonly errorState = signal<RootErrorState | null>(null);
 
-  readonly error$ = this.currentError.asReadonly();
+  readonly currentError = this.errorState.asReadonly();
 
   setError(error: RootErrorState): void {
-    this.currentError.set(error);
+    this.errorState.set(error);
+  }
+
+  setErrorFromErrorValue(errorValue: ErrorValue, title?: string): void {
+    this.errorState.set({
+      title: title ?? 'Error',
+      userMessage: errorValue.message,
+      error: errorValue,
+      timestamp: Date.now(),
+    });
   }
 
   clearError(): void {
-    this.currentError.set(null);
+    this.errorState.set(null);
   }
 }

@@ -1,179 +1,259 @@
 <div class="app-container">
-  <!-- MAIN CONTENT with Two Columns -->
-  <main class="main-container">
-    <!-- MIDDLE COLUMN - Grid Menu Layout -->
-    <section class="column column--middle" [style.flex-basis]="middleColumnSize() + '%'">
-      <div class="column__content column__content--scrollable">
+  <!-- MAIN CONTENT with Three Columns -->
+  <main class="main-container" [style.display]="'flex'" [style.height]="'100%'">
+      <!-- LEFT COLUMN - Navigation -->
+      <section class="column column--left" [style.flex]="'0 0 ' + leftColumnSize() + '%'">
+        <!-- Top Stats Section -->
+        <div class="column__stats">
+          <div class="stats-item">
+            <span class="stats-label">Main Menu</span>
+            <span class="stats-count">{{ mainMenuCount() }}</span>
+          </div>
+          <div class="stats-item">
+            <span class="stats-label">Support</span>
+            <span class="stats-count">{{ supportMenuCount() }}</span>
+          </div>
+        </div>
+
         <!-- Search Section -->
-        <div class="menu-search-section">
-          <input type="text"
-                 class="menu-search-input"
-                 placeholder="Search menu items..."
-                 [(ngModel)]="menuSearchQuery"
-                 (input)="onMenuSearchChange()">
-          <lucide-angular name="search" class="menu-search-icon"></lucide-angular>
-          @if (menuSearchQuery()) {
-            <button type="button" class="menu-search-clear" (click)="clearMenuSearch()">
-              <lucide-angular name="x" class="menu-search-icon"></lucide-angular>
+        <div class="column__search">
+          <lucide-angular [img]="icons.Search" class="search-icon" size="16"></lucide-angular>
+          <input 
+            type="text" 
+            class="search-input" 
+            placeholder="Search menu..." 
+            [value]="searchQuery()"
+            (input)="onSearchChange($event)"
+            (keydown)="onKeyDown($event)">
+          @if (searchQuery()) {
+            <button type="button" class="search-clear" (click)="clearSearch()">
+              <lucide-angular [img]="icons.X" size="14"></lucide-angular>
             </button>
           }
         </div>
 
-        <!-- Top Section with Menu Counts -->
-        <div class="menu-counts">
-          <div class="menu-count-item">
-            <lucide-angular name="layout-grid" class="menu-count-icon"></lucide-angular>
-            <span class="menu-count-label">Main Menu</span>
-            <span class="menu-count-value">{{ filteredMainMenu().length }}</span>
+        <div class="column__content column__content--scrollable">
+          <!-- Main Menu Group -->
+          <div class="menu-group">
+            <div class="menu-group__header">Main</div>
+            <div class="menu-grid">
+              @for (item of filteredMainMenus(); track item.id) {
+                <div class="menu-item" (click)="setActiveView(item.id)"
+                   [class.active]="activeView() === item.id">
+                  <lucide-angular [img]="getIcon(item.icon)" class="menu-item__icon" size="24"></lucide-angular>
+                  <span class="menu-item__label">{{ item.label }}</span>
+                </div>
+              } @empty {
+                <div class="menu-empty">No results found</div>
+              }
+            </div>
           </div>
-          <div class="menu-count-divider">|</div>
-          <div class="menu-count-item">
-            <lucide-angular name="headset" class="menu-count-icon"></lucide-angular>
-            <span class="menu-count-label">Support</span>
-            <span class="menu-count-value">{{ filteredSupportMenu().length }}</span>
+
+          <!-- Support Menu Group -->
+          <div class="menu-group">
+            <div class="menu-group__header">Support</div>
+            <div class="menu-grid">
+              @for (item of filteredSupportMenus(); track item.id) {
+                <div class="menu-item" (click)="setActiveView(item.id)"
+                   [class.active]="activeView() === item.id">
+                  <lucide-angular [img]="getIcon(item.icon)" class="menu-item__icon" size="24"></lucide-angular>
+                  <span class="menu-item__label">{{ item.label }}</span>
+                </div>
+              }
+            </div>
           </div>
         </div>
-
-        <!-- Main Menu Grid Group -->
-        <div class="menu-grid-group">
-          <div class="menu-grid-header">
-            <lucide-angular name="house" class="menu-grid-icon"></lucide-angular>
-            <span class="menu-grid-title">Main Menu</span>
+        <div class="column__footer">
+          <div class="column__context">
+            <lucide-angular [img]="icons.Folder" class="column__icon" size="16"></lucide-angular>
+            <span class="column__label">Main App</span>
           </div>
-          <div class="menu-grid">
-             @for (item of filteredMainMenu(); track item.value) {
-               <button type="button" class="grid-menu-item" (click)="selectMainMenu(item.value)" [class.selected]="selectedMainMenu() === item.value">
-                 <lucide-angular [name]="getMainMenuIcon(item.value)" class="grid-menu-icon"></lucide-angular>
-                 <span class="grid-menu-label">{{ item.label }}</span>
-               </button>
-             }
+          <div class="column__actions">
+            <button type="button" class="column__action-btn" (click)="toggleColumnWidth()" [title]="leftColumnSize() === 25 ? 'Expand sidebar' : 'Collapse sidebar'">
+              <lucide-angular [img]="leftColumnSize() === 25 ? icons.Maximize2 : icons.Minimize2" size="16"></lucide-angular>
+            </button>
+            <button type="button" class="column__action-btn" (click)="showAppInfo()" title="Show App Info">
+              <lucide-angular [img]="icons.Info" size="16"></lucide-angular>
+            </button>
           </div>
         </div>
+      </section>
 
-        <!-- Support Menu Grid Group -->
-        <div class="menu-grid-group">
-          <div class="menu-grid-header">
-            <lucide-angular name="headset" class="menu-grid-icon"></lucide-angular>
-            <span class="menu-grid-title">Support</span>
-          </div>
-          <div class="menu-grid">
-             @for (item of filteredSupportMenu(); track item.value) {
-               <button type="button" class="grid-menu-item" (click)="selectSupportMenu(item.value)" [class.selected]="selectedSupportMenu() === item.value">
-                 <lucide-angular [name]="getSupportMenuIcon(item.value)" class="grid-menu-icon"></lucide-angular>
-                 <span class="grid-menu-label">{{ item.label }}</span>
-               </button>
-             }
-          </div>
+      <!-- LEFT SPLITTER -->
+      <div class="splitter splitter--vertical"
+           (mousedown)="startResize($event)">
+        <div class="splitter__handle">
+          <div class="splitter__grip splitter__grip--vertical"></div>
         </div>
       </div>
 
-      <!-- Bottom Fixed Panel for First Column -->
-      <div class="column__footer">
-        <div class="footer-context">
-          <lucide-angular name="zap" class="footer-context-icon"></lucide-angular>
-          <span class="footer-context__label">Zig WebUI Angular</span>
-        </div>
-        <div class="footer-actions">
-          <button type="button" class="footer-action-btn" (click)="toggleLayoutMode()" title="Switch Layout">
-            <lucide-angular [name]="layoutMode() === 'main-left' ? 'panel-left-close' : 'panel-left-open'" class="footer-action-icon"></lucide-angular>
-          </button>
-          <button type="button" class="footer-action-btn" (click)="toggleAppInfo()" title="App Info">
-            <lucide-angular name="info" class="footer-action-icon"></lucide-angular>
-          </button>
-        </div>
-      </div>
-    </section>
-
-    <!-- MIDDLE SPLITTER -->
-    <div class="splitter splitter--vertical"
-         (mousedown)="startResize($event, 'middle')">
-      <div class="splitter__handle">
-        <div class="splitter__grip splitter__grip--vertical">
-          <lucide-angular name="grip-vertical" class="splitter-icon"></lucide-angular>
-        </div>
-      </div>
-    </div>
-
-    <!-- RIGHT COLUMN - Centered Icon with Long Dummy Text -->
-    <section class="column column--right" [class.has-selection]="selectedCard()" [style.flex-basis]="rightColumnSize() + '%'">
-      <div class="column__content column__content--scrollable">
-         <!-- Top Section with Menu Title -->
-         <div class="menu-title-section">
-           <lucide-angular [name]="menuItems().icon" class="menu-title-icon"></lucide-angular>
-           <span class="menu-title-text">
-             {{ selectedMainMenu() ? getMainMenuName(selectedMainMenu()!) :
-                selectedSupportMenu() ? getSupportMenuName(selectedSupportMenu()!) : 'Menu Items' }}
-           </span>
+       <!-- MIDDLE COLUMN - Page Content -->
+       <section class="column column--middle" [style.flex]="'1 1 auto'">
+         <!-- Third Panel Selector -->
+         <div class="third-panel-selector">
+           <button type="button" class="selector-btn" 
+                   [class.active]="thirdPanelView() === 'details'"
+                   (click)="setThirdPanelView('details')">
+             <lucide-angular [img]="icons.FileText" size="16"></lucide-angular>
+             <span>Details</span>
+           </button>
+           <button type="button" class="selector-btn" 
+                   [class.active]="thirdPanelView() === 'activity'"
+                   (click)="setThirdPanelView('activity')">
+             <lucide-angular [img]="icons.Activity" size="16"></lucide-angular>
+             <span>Activity</span>
+           </button>
          </div>
 
-        <!-- Centered Content Area with Icon and Long Dummy Text -->
-        <div class="centered-content-area">
-          <div class="main-icon">
-            <lucide-angular [name]="menuItems().icon" class="main-icon-svg"></lucide-angular>
-          </div>
-          <div class="dummy-text-block">
-            <p>
-              Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.
-              Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.
-              Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur.
-              Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.
-            </p>
-            <p>
-              Sed ut perspiciatis unde omnis iste natus error sit voluptatem accusantium doloremque laudantium, totam rem aperiam,
-              eaque ipsa quae ab illo inventore veritatis et quasi architecto beatae vitae dicta sunt explicabo.
-            </p>
-            <p>
-              Nemo enim ipsam voluptatem quia voluptas sit aspernatur aut odit aut fugit, sed quia consequuntur magni dolores
-              eos qui ratione voluptatem sequi nesciunt. Neque porro quisquam est, qui dolorem ipsum quia dolor sit amet,
-              consectetur, adipisci velit.
-            </p>
-          </div>
-        </div>
-      </div>
-
-      <!-- Bottom Fixed Panel for Second Column -->
-      <div class="column__footer">
-        <div class="footer-context">
-          <lucide-angular name="file-text" class="footer-context-icon"></lucide-angular>
-          <span class="footer-context__label">{{ menuItems().title }}</span>
-          <span class="footer-context__count">1</span>
-        </div>
-        <div class="footer-actions">
-          <button type="button" class="footer-action-btn" (click)="closeRightPanel()" title="Close panel">
-            <lucide-angular name="x" class="footer-action-icon"></lucide-angular>
-          </button>
-          <button type="button" class="footer-action-btn" (click)="toggleAppInfo()" title="Info">
-            <lucide-angular name="info" class="footer-action-icon"></lucide-angular>
-          </button>
-        </div>
-      </div>
-    </section>
+         <div class="column__content column__content--scrollable">
+           @switch (activeView()) {
+             @case ('home') {
+               <div class="page-content">
+                 <div class="page-header">
+                   <lucide-angular [img]="icons.Home" size="32"></lucide-angular>
+                   <h1>Home</h1>
+                 </div>
+                 <p class="page-description">Welcome to your dashboard. Select an option from the menu to get started.</p>
+                 <div class="page-cards">
+                   <div class="info-card">
+                     <h3>Quick Start</h3>
+                     <p>Get started by exploring the features in the sidebar.</p>
+                   </div>
+                   <div class="info-card">
+                     <h3>Recent Activity</h3>
+                     <p>View your recent activities and updates here.</p>
+                   </div>
+                 </div>
+               </div>
+             }
+             @case ('auth') {
+               <div class="page-content">
+                 <div class="page-header">
+                   <lucide-angular [img]="icons.Lock" size="32"></lucide-angular>
+                   <h1>Authentication</h1>
+                 </div>
+                 <p class="page-description">Manage authentication settings and security preferences.</p>
+                 <div class="page-cards">
+                   <div class="info-card">
+                     <h3>Login Settings</h3>
+                     <p>Configure your login preferences and security options.</p>
+                   </div>
+                   <div class="info-card">
+                     <h3>User Management</h3>
+                     <p>Manage user accounts and permissions.</p>
+                   </div>
+                 </div>
+               </div>
+             }
+             @case ('sqlite') {
+               <div class="page-content">
+                 <div class="page-header">
+                   <lucide-angular [img]="icons.Database" size="32"></lucide-angular>
+                   <h1>SQLite CRUD</h1>
+                 </div>
+                 <p class="page-description">Database operations and data management.</p>
+                 <div class="page-cards">
+                   <div class="info-card">
+                     <h3>Database Tables</h3>
+                     <p>View and manage your database tables.</p>
+                   </div>
+                   <div class="info-card">
+                     <h3>Query Builder</h3>
+                     <p>Build and execute database queries.</p>
+                   </div>
+                 </div>
+               </div>
+             }
+             @case ('devtools') {
+               <div class="page-content">
+                 <div class="page-header">
+                   <lucide-angular [img]="icons.Settings" size="32"></lucide-angular>
+                   <h1>DevTools</h1>
+                 </div>
+                 <p class="page-description">Debugging tools and development utilities.</p>
+                 <div class="page-cards">
+                   <div class="info-card">
+                     <h3>Console</h3>
+                     <p>View application logs and debug output.</p>
+                   </div>
+                   <div class="info-card">
+                     <h3>Network Monitor</h3>
+                     <p>Monitor network requests and responses.</p>
+                   </div>
+                 </div>
+               </div>
+             }
+             @case ('settings') {
+               <div class="page-content">
+                 <div class="page-header">
+                   <lucide-angular [img]="icons.Settings" size="32"></lucide-angular>
+                   <h1>Settings</h1>
+                 </div>
+                 <p class="page-description">Configure application settings.</p>
+                 <div class="page-cards">
+                   <div class="info-card">
+                     <h3>General</h3>
+                     <p>General application preferences.</p>
+                   </div>
+                   <div class="info-card">
+                     <h3>Advanced</h3>
+                     <p>Advanced configuration options.</p>
+                   </div>
+                 </div>
+               </div>
+             }
+             @case ('help') {
+               <div class="page-content">
+                 <div class="page-header">
+                   <lucide-angular [img]="icons.Info" size="32"></lucide-angular>
+                   <h1>Help</h1>
+                 </div>
+                 <p class="page-description">Get help and support.</p>
+                 <div class="page-cards">
+                   <div class="info-card">
+                     <h3>Documentation</h3>
+                     <p>Read the documentation.</p>
+                   </div>
+                   <div class="info-card">
+                     <h3>FAQ</h3>
+                     <p>Frequently asked questions.</p>
+                   </div>
+                 </div>
+               </div>
+             }
+             @case ('about') {
+               <div class="page-content">
+                 <div class="page-header">
+                   <lucide-angular [img]="icons.Info" size="32"></lucide-angular>
+                   <h1>About</h1>
+                 </div>
+                 <p class="page-description">About this application.</p>
+                 <div class="page-cards">
+                   <div class="info-card">
+                     <h3>Version</h3>
+                     <p>1.0.0</p>
+                   </div>
+                   <div class="info-card">
+                     <h3>Credits</h3>
+                     <p>Built with Odin, WebUI, and Angular.</p>
+                   </div>
+                 </div>
+               </div>
+             }
+             @default {
+               <div class="page-content">
+                 <div class="page-header">
+                   <lucide-angular [img]="icons.Home" size="32"></lucide-angular>
+                   <h1>Home</h1>
+                 </div>
+                 <p class="page-description">Welcome to your dashboard.</p>
+               </div>
+             }
+           }
+         </div>
+       </section>
   </main>
 
   <!-- Window Layer for WinBox -->
   <div class="window-layer"></div>
-
-  <!-- Mobile backdrop for preview panel -->
-  <div class="mobile-backdrop" [class.visible]="selectedCard()" (click)="closeRightPanel()"></div>
-
-  <!-- App Info Panel -->
-  <div class="app-info-panel" [class.visible]="showAppInfo()" (click)="closeAppInfo()">
-    <div class="app-info-content" (click)="$event.stopPropagation()">
-      <div class="app-info-header">
-        <div class="app-info-title">
-          <lucide-angular name="zap" class="app-info-icon"></lucide-angular>
-          <h3>Zig WebUI Angular Rspack</h3>
-        </div>
-        <button type="button" class="close-btn" (click)="toggleAppInfo()">
-          <lucide-angular name="x" class="close-btn-icon"></lucide-angular>
-        </button>
-      </div>
-      <div class="app-info-body">
-        <p><lucide-angular name="tag" class="info-body-icon"></lucide-angular> <strong>Version:</strong> 1.0.0</p>
-        <p><lucide-angular name="layers" class="info-body-icon"></lucide-angular> <strong>Framework:</strong> Angular 21 + Zig</p>
-        <p><lucide-angular name="radio" class="info-body-icon"></lucide-angular> <strong>Communication:</strong> WebUI WebSocket Bridge</p>
-        <p><lucide-angular name="package" class="info-body-icon"></lucide-angular> <strong>Items:</strong> {{ filteredCards().length }} applications</p>
-      </div>
-    </div>
-  </div>
 </div>

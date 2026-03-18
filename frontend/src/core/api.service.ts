@@ -1,7 +1,5 @@
-// API Service using WebUI Native Bridge - NO HTTP/HTTPS
-// All communication goes through WebUI's WebSocket bridge
-import { Injectable, signal, computed, inject } from '@angular/core';
-import { WebuiBridgeService } from './webui-bridge.service';
+// Modern API service with signals for backend communication
+import { Injectable, signal, computed } from '@angular/core';
 
 export interface ApiResponse<T> {
   success: boolean;
@@ -23,56 +21,90 @@ export interface ApiState {
 @Injectable({ providedIn: 'root' })
 export class ApiService {
   private readonly defaultTimeout = 30000;
-  private readonly webui = inject(WebuiBridgeService);
-
+  
   // Internal state signals
   private readonly loading = signal(false);
   private readonly error = signal<string | null>(null);
   private readonly lastCallTime = signal<number | null>(null);
   private readonly callCount = signal(0);
-
+  
   // Public readonly signals
   readonly isLoading = this.loading.asReadonly();
   readonly error$ = this.error.asReadonly();
   readonly lastCallTime$ = this.lastCallTime.asReadonly();
   readonly callCount$ = this.callCount.asReadonly();
-
+  
   // Computed signals
   readonly hasError = computed(() => this.error() !== null);
   readonly isReady = computed(() => !this.loading() && this.error() === null);
-  readonly isConnected = this.webui.isConnected;
-
+  
   /**
-   * Call a backend function via WebUI WebSocket bridge
-   * NO HTTP/HTTPS is used - all communication is via WebSocket
+   * Call a backend function with automatic loading/error state management
    */
   async call<T>(functionName: string, args: unknown[] = [], options?: CallOptions): Promise<ApiResponse<T>> {
     this.loading.set(true);
     this.error.set(null);
     this.callCount.update(count => count + 1);
+    
+    return new Promise((resolve, reject) => {
+      const timeoutMs = options?.timeoutMs ?? this.defaultTimeout;
+      const responseEventName = `${functionName}_response`;
 
-    try {
-      // Use WebUI bridge for direct WebSocket communication
-      const data = await this.webui.call<T>(functionName, args);
-      
-      this.loading.set(false);
-      this.lastCallTime.set(Date.now());
-      
-      return {
-        success: true,
-        data,
+      const handler = (event: CustomEvent<ApiResponse<T>>) => {
+        clearTimeout(timeoutId);
+        window.removeEventListener(responseEventName, handler as EventListener);
+        
+        this.loading.set(false);
+        this.lastCallTime.set(Date.now());
+        
+        if (!event.detail.success) {
+          this.error.set(event.detail.error ?? 'Unknown error');
+        }
+        
+        resolve(event.detail);
       };
-    } catch (err) {
-      this.loading.set(false);
-      const errorMsg = err instanceof Error ? err.message : 'Unknown error';
-      this.error.set(errorMsg);
-      this.lastCallTime.set(Date.now());
-      
-      return {
-        success: false,
-        error: errorMsg,
-      };
-    }
+
+      const timeoutId = setTimeout(() => {
+        window.removeEventListener(responseEventName, handler as EventListener);
+        this.loading.set(false);
+        this.error.set(`Request timeout after ${timeoutMs}ms`);
+        
+        reject({
+          success: false,
+          error: `Request timeout after ${timeoutMs}ms`,
+        });
+      }, timeoutMs);
+
+      try {
+        const backendFn = (window as unknown as Record<string, unknown>)[functionName];
+
+        if (typeof backendFn !== 'function') {
+          clearTimeout(timeoutId);
+          window.removeEventListener(responseEventName, handler as EventListener);
+          this.loading.set(false);
+          this.error.set(`Backend function not found: ${functionName}`);
+          
+          reject({
+            success: false,
+            error: `Backend function not found: ${functionName}`,
+          });
+          return;
+        }
+
+        backendFn(...args);
+      } catch (error) {
+        clearTimeout(timeoutId);
+        window.removeEventListener(responseEventName, handler as EventListener);
+        this.loading.set(false);
+        const errorMsg = error instanceof Error ? error.message : String(error);
+        this.error.set(errorMsg);
+        
+        reject({
+          success: false,
+          error: errorMsg,
+        });
+      }
+    });
   }
 
   /**
@@ -85,28 +117,14 @@ export class ApiService {
     }
     return response.data as T;
   }
-
-  /**
-   * Subscribe to backend events via WebUI bridge
-   */
-  onEvent<T>(event: string, handler: (data: T) => void): () => void {
-    return this.webui.onEvent(event, handler as (data: unknown) => void);
-  }
-
-  /**
-   * Emit event to backend via WebUI WebSocket bridge
-   */
-  async emit(event: string, data: unknown): Promise<void> {
-    return this.webui.emit(event, data);
-  }
-
+  
   /**
    * Clear error state
    */
   clearError(): void {
     this.error.set(null);
   }
-
+  
   /**
    * Reset all state
    */
@@ -115,12 +133,5 @@ export class ApiService {
     this.error.set(null);
     this.lastCallTime.set(null);
     this.callCount.set(0);
-  }
-
-  /**
-   * Get WebUI bridge stats
-   */
-  getStats() {
-    return this.webui.stats$();
   }
 }
