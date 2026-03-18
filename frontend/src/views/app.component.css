@@ -3,6 +3,99 @@
    Multiple vertical splits (Left/Middle/Right)
    ============================================================================ */
 
+/* Lucide Icons - SVG Styling */
+lucide-angular,
+lucide-angular svg {
+  display: inline-block;
+  width: 1em;
+  height: 1em;
+  stroke-width: 2;
+  vertical-align: middle;
+}
+
+.menu-search-icon,
+.menu-grid-icon,
+.menu-title-icon,
+.grid-menu-icon {
+  width: 1em;
+  height: 1em;
+}
+
+.grid-menu-icon {
+  width: 24px;
+  height: 24px;
+}
+
+.menu-grid-icon {
+  width: 14px;
+  height: 14px;
+}
+
+.menu-title-icon {
+  width: 18px;
+  height: 18px;
+}
+
+.menu-search-icon {
+  width: 16px;
+  height: 16px;
+}
+
+/* New Icon Classes */
+.menu-count-icon {
+  width: 14px;
+  height: 14px;
+  margin-right: 6px;
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.footer-context-icon {
+  width: 14px;
+  height: 14px;
+  margin-right: 6px;
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.footer-action-icon {
+  width: 16px;
+  height: 16px;
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.splitter-icon {
+  width: 12px;
+  height: 12px;
+  color: rgba(255, 255, 255, 0.3);
+}
+
+.main-icon-svg {
+  width: 64px;
+  height: 64px;
+  color: rgba(255, 255, 255, 0.8);
+  stroke-width: 1.5;
+}
+
+.app-info-icon {
+  width: 20px;
+  height: 20px;
+  margin-right: 8px;
+  color: #667eea;
+}
+
+.close-btn-icon {
+  width: 18px;
+  height: 18px;
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.info-body-icon {
+  width: 16px;
+  height: 16px;
+  margin-right: 8px;
+  color: rgba(255, 255, 255, 0.5);
+  vertical-align: text-bottom;
+}
+
 /* App Container */
 .app-container {
   display: flex;
@@ -280,6 +373,12 @@
   border-radius: 12px 12px 0 0;
 }
 
+.app-info-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .app-info-header h3 {
   margin: 0;
   font-size: 16px;
@@ -315,6 +414,8 @@
   margin: 0 0 12px 0;
   color: rgba(255, 255, 255, 0.8);
   font-size: 14px;
+  display: flex;
+  align-items: center;
 }
 
 .app-info-body p:last-child {
@@ -356,7 +457,8 @@
 .menu-search-icon {
   position: absolute;
   left: 28px;
-  font-size: 14px;
+  width: 14px;
+  height: 14px;
   color: rgba(255, 255, 255, 0.6);
   pointer-events: none;
 }
@@ -392,9 +494,8 @@
 
 .menu-count-item {
   display: flex;
-  flex-direction: column;
   align-items: center;
-  gap: 4px;
+  gap: 6px;
 }
 
 .menu-count-label {
@@ -434,7 +535,8 @@
 }
 
 .menu-grid-icon {
-  font-size: 14px;
+  width: 14px;
+  height: 14px;
 }
 
 .menu-grid-title {
@@ -480,7 +582,8 @@
 }
 
 .grid-menu-icon {
-  font-size: 24px;
+  width: 24px;
+  height: 24px;
   margin-bottom: 8px;
 }
 
@@ -502,7 +605,8 @@
 }
 
 .menu-title-icon {
-  font-size: 18px;
+  width: 18px;
+  height: 18px;
 }
 
 .menu-title-text {

@@ -138,7 +138,7 @@ pub const EventSubscription = struct {
 
 pub const EventBus = struct {
     allocator: std.mem.Allocator,
-    subscriptions: std.ArrayList(EventSubscription),
+    subscriptions: std.ArrayListAligned(EventSubscription, null),
     next_id: usize = 0,
     mutex: std.Thread.Mutex = .{},
 
@@ -148,7 +148,7 @@ pub const EventBus = struct {
         const self = allocator.create(EventBus) catch return DIError.OutOfMemory;
         self.* = .{
             .allocator = allocator,
-            .subscriptions = std.ArrayList(EventSubscription){ .allocator = allocator },
+            .subscriptions = std.ArrayListAligned(EventSubscription, null){},
         };
         return self;
     }
@@ -211,8 +211,7 @@ pub const EventBus = struct {
     pub fn emit(self: *Self, event: *const Event) void {
         self.mutex.lock();
 
-        var matching_subscriptions = std.ArrayList(*EventSubscription){
-            .allocator = self.allocator,
+        var matching_subscriptions = std.ArrayListAligned(*EventSubscription, null){
             .items = &[_]*EventSubscription{},
             .capacity = 0,
         };
@@ -221,7 +220,7 @@ pub const EventBus = struct {
             for (matching_subscriptions.items) |sub| {
                 self.allocator.destroy(sub);
             }
-            matching_subscriptions.deinit();
+            matching_subscriptions.deinit(self.allocator);
         }
 
         // Collect matching subscriptions
@@ -233,7 +232,7 @@ pub const EventBus = struct {
                     return;
                 };
                 copy.* = sub.*;
-                if (matching_subscriptions.append(copy)) |_| {
+                if (matching_subscriptions.append(self.allocator, copy)) |_| {
                     // Success
                 } else |_| {
                     // Append failed - clean up the allocated copy
@@ -392,7 +391,7 @@ pub const ConfigService = struct {
         const self = allocator.create(ConfigService) catch return DIError.OutOfMemory;
         self.* = .{
             .allocator = allocator,
-            .data = std.StringHashMap([]const u8){ .allocator = allocator },
+            .data = std.StringHashMap([]const u8).init(allocator),
         };
         try self.data.put(try allocator.dupe(u8, "app.name"), try allocator.dupe(u8, "Zig WebUI App"));
         try self.data.put(try allocator.dupe(u8, "app.version"), try allocator.dupe(u8, "1.0.0"));
@@ -556,7 +555,7 @@ pub const EventService = struct {
         const self = allocator.create(EventService) catch return DIError.OutOfMemory;
         self.* = .{
             .allocator = allocator,
-            .handlers = std.StringHashMap(WebuiEventHandler){ .allocator = allocator },
+            .handlers = std.StringHashMap(WebuiEventHandler).init(allocator),
         };
         return self;
     }
@@ -594,7 +593,7 @@ pub const BackendApiService = struct {
         const self = allocator.create(BackendApiService) catch return DIError.OutOfMemory;
         self.* = .{
             .allocator = allocator,
-            .handlers = std.StringHashMap(WebuiEventHandler){ .allocator = allocator },
+            .handlers = std.StringHashMap(WebuiEventHandler).init(allocator),
             .call_count = 0,
         };
         return self;
@@ -727,7 +726,7 @@ pub const StorageService = struct {
         const self = allocator.create(StorageService) catch return DIError.OutOfMemory;
         self.* = .{
             .allocator = allocator,
-            .data = std.StringHashMap([]const u8){ .allocator = allocator },
+            .data = std.StringHashMap([]const u8).init(allocator),
         };
         return self;
     }
@@ -1329,7 +1328,7 @@ test "DI - EventService binds handlers" {
     const events = try EventService.create(testing.allocator);
     defer events.deinit();
     const dummy = struct {
-        fn handler(_: ?*webui.Event) callconv(.C) void {}
+        fn handler(_: ?*webui.Event) callconv(.c) void {}
     }.handler;
     try events.bind("test", dummy);
     try testing.expect(events.handlers.count() > 0);
@@ -1395,10 +1394,10 @@ test "DI - Multiple event bindings" {
     defer events.deinit();
 
     const handler1 = struct {
-        fn h(_: ?*webui.Event) callconv(.C) void {}
+        fn h(_: ?*webui.Event) callconv(.c) void {}
     }.handler;
     const handler2 = struct {
-        fn h(_: ?*webui.Event) callconv(.C) void {}
+        fn h(_: ?*webui.Event) callconv(.c) void {}
     }.handler;
 
     try events.bind("event1", handler1);
@@ -1412,7 +1411,7 @@ test "DI - ApiService register and call handlers" {
     defer api.deinit();
 
     const handler = struct {
-        fn h(_: ?*webui.Event) callconv(.C) void {}
+        fn h(_: ?*webui.Event) callconv(.c) void {}
     }.handler;
 
     try api.registerHandler("testHandler", handler);
@@ -1468,7 +1467,7 @@ test "DI - BackendApiService reset and unregister" {
     defer api.deinit();
 
     const handler = struct {
-        fn h(_: ?*webui.Event) callconv(.C) void {}
+        fn h(_: ?*webui.Event) callconv(.c) void {}
     }.handler;
 
     try api.registerHandler("handler1", handler);

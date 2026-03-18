@@ -266,7 +266,7 @@ pub fn main() !void {
 
         di.emitAppStarted();
 
-        std.debug.print("\nServer running. Press Ctrl+C to stop.\n");
+        std.debug.print("\nServer running. Press Ctrl+C to stop.\n", .{});
 
         // Wait for window to close or signal
         while (webui.waitAsync()) {

@@ -1,8 +1,8 @@
 import { CommonModule } from '@angular/common';
-import { Component, computed, inject, signal } from '@angular/core';
+import { Component, computed, inject, signal, provideEnvironmentInitializer } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { WinBoxService, type WinBoxInstance } from '../core/winbox.service';
-import { LucideAngularModule } from 'lucide-angular';
+import { LucideAngularModule, LucideIconProvider, LUCIDE_ICONS, icons } from 'lucide-angular';
 
 export interface NavItem {
   id: string;
@@ -45,6 +45,9 @@ const TECH_CARDS: Card[] = [
   selector: 'app-root',
   standalone: true,
   imports: [CommonModule, FormsModule, LucideAngularModule],
+  providers: [
+    { provide: LUCIDE_ICONS, multi: true, useValue: new LucideIconProvider(icons) },
+  ],
   templateUrl: './app.component.html',
   styleUrls: ['./app.component.css'],
 })
@@ -91,26 +94,26 @@ export class AppComponent {
   
   // Menu search
   readonly menuSearchQuery = signal('');
-  
+
   // Menu selection state
   readonly selectedMainMenu = signal<number | null>(null);
   readonly selectedSupportMenu = signal<number | null>(null);
-  
+
    // Menu items definition
    readonly mainMenuItems = [
-     { icon: 'bar-chart-2', label: 'Dashboard', value: 1 },
+     { icon: 'chart-column', label: 'Dashboard', value: 1 },
      { icon: 'folder', label: 'Files', value: 2 },
      { icon: 'users', label: 'Users', value: 3 },
      { icon: 'settings', label: 'Settings', value: 4 },
      { icon: 'bell', label: 'Notifications', value: 5 },
      { icon: 'file-text', label: 'Reports', value: 6 },
    ];
-   
+
    readonly supportMenuItems = [
-     { icon: 'help-circle', label: 'Help', value: 1 },
+     { icon: 'circle-question-mark', label: 'Help', value: 1 },
      { icon: 'message-square', label: 'Contact', value: 2 },
      { icon: 'book', label: 'Documentation', value: 3 },
-     { icon: 'plus-square', label: 'Updates', value: 4 },
+     { icon: 'square-plus', label: 'Updates', value: 4 },
    ];
   
   // Filtered menu items based on search
@@ -134,9 +137,9 @@ export class AppComponent {
    readonly menuItems = computed(() => {
      const mainId = this.selectedMainMenu();
      const supportId = this.selectedSupportMenu();
-     
+
      if (mainId === 1) {
-       return { icon: 'bar-chart-2', title: 'Overview Dashboard' };
+       return { icon: 'chart-column', title: 'Overview Dashboard' };
      }
      if (mainId === 2) {
        return { icon: 'folder', title: 'File Manager' };
@@ -151,10 +154,10 @@ export class AppComponent {
        return { icon: 'bell', title: 'Notification Center' };
      }
      if (mainId === 6) {
-       return { icon: 'bar-chart-2', title: 'Reports Dashboard' };
+       return { icon: 'file-text', title: 'Reports Dashboard' };
      }
      if (supportId === 1) {
-       return { icon: 'book-open', title: 'Help Center' };
+       return { icon: 'circle-question-mark', title: 'Help Center' };
      }
      if (supportId === 2) {
        return { icon: 'message-square', title: 'Contact Support' };
@@ -165,7 +168,7 @@ export class AppComponent {
      if (supportId === 4) {
        return { icon: 'refresh-cw', title: 'Updates & Changes' };
      }
-     
+
      // Default state when nothing is selected
      return { icon: 'list', title: 'Select a menu item' };
    });
@@ -380,14 +383,14 @@ export class AppComponent {
 
   getMainMenuIcon(id: number): string {
     const icons: { [key: number]: string } = {
-      1: 'bar-chart-2',
+      1: 'chart-column',
       2: 'folder',
       3: 'users',
       4: 'settings',
       5: 'bell',
       6: 'file-text',
     };
-    return icons[id] || 'bar-chart-2';
+    return icons[id] || 'chart-column';
   }
 
   getSupportMenuName(id: number): string {
@@ -402,12 +405,12 @@ export class AppComponent {
 
   getSupportMenuIcon(id: number): string {
     const icons: { [key: number]: string } = {
-      1: 'help-circle',
+      1: 'circle-question-mark',
       2: 'message-square',
       3: 'book',
-      4: 'plus-square',
+      4: 'square-plus',
     };
-    return icons[id] || 'help-circle';
+    return icons[id] || 'circle-question-mark';
   }
 
   onMenuSearchChange(): void {

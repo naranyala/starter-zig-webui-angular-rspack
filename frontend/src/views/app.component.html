@@ -18,24 +18,26 @@
             </button>
           }
         </div>
-        
+
         <!-- Top Section with Menu Counts -->
         <div class="menu-counts">
           <div class="menu-count-item">
+            <lucide-angular name="layout-grid" class="menu-count-icon"></lucide-angular>
             <span class="menu-count-label">Main Menu</span>
             <span class="menu-count-value">{{ filteredMainMenu().length }}</span>
           </div>
           <div class="menu-count-divider">|</div>
           <div class="menu-count-item">
+            <lucide-angular name="headset" class="menu-count-icon"></lucide-angular>
             <span class="menu-count-label">Support</span>
             <span class="menu-count-value">{{ filteredSupportMenu().length }}</span>
           </div>
         </div>
-        
+
         <!-- Main Menu Grid Group -->
         <div class="menu-grid-group">
           <div class="menu-grid-header">
-            <lucide-angular name="home" class="menu-grid-icon"></lucide-angular>
+            <lucide-angular name="house" class="menu-grid-icon"></lucide-angular>
             <span class="menu-grid-title">Main Menu</span>
           </div>
           <div class="menu-grid">
@@ -47,11 +49,11 @@
              }
           </div>
         </div>
-        
+
         <!-- Support Menu Grid Group -->
         <div class="menu-grid-group">
           <div class="menu-grid-header">
-            <lucide-angular name="settings" class="menu-grid-icon"></lucide-angular>
+            <lucide-angular name="headset" class="menu-grid-icon"></lucide-angular>
             <span class="menu-grid-title">Support</span>
           </div>
           <div class="menu-grid">
@@ -64,18 +66,19 @@
           </div>
         </div>
       </div>
-      
+
       <!-- Bottom Fixed Panel for First Column -->
       <div class="column__footer">
         <div class="footer-context">
+          <lucide-angular name="zap" class="footer-context-icon"></lucide-angular>
           <span class="footer-context__label">Zig WebUI Angular</span>
         </div>
         <div class="footer-actions">
           <button type="button" class="footer-action-btn" (click)="toggleLayoutMode()" title="Switch Layout">
-            {{ layoutMode() === 'main-left' ? '◀ ▶' : '▶ ▶' }}
+            <lucide-angular [name]="layoutMode() === 'main-left' ? 'panel-left-close' : 'panel-left-open'" class="footer-action-icon"></lucide-angular>
           </button>
           <button type="button" class="footer-action-btn" (click)="toggleAppInfo()" title="App Info">
-            ℹ️
+            <lucide-angular name="info" class="footer-action-icon"></lucide-angular>
           </button>
         </div>
       </div>
@@ -85,7 +88,9 @@
     <div class="splitter splitter--vertical"
          (mousedown)="startResize($event, 'middle')">
       <div class="splitter__handle">
-        <div class="splitter__grip splitter__grip--vertical"></div>
+        <div class="splitter__grip splitter__grip--vertical">
+          <lucide-angular name="grip-vertical" class="splitter-icon"></lucide-angular>
+        </div>
       </div>
     </div>
 
@@ -94,50 +99,51 @@
       <div class="column__content column__content--scrollable">
          <!-- Top Section with Menu Title -->
          <div class="menu-title-section">
-           <lucide-angular name="list" class="menu-title-icon"></lucide-angular>
+           <lucide-angular [name]="menuItems().icon" class="menu-title-icon"></lucide-angular>
            <span class="menu-title-text">
-             {{ selectedMainMenu() ? getMainMenuName(selectedMainMenu()!) : 
+             {{ selectedMainMenu() ? getMainMenuName(selectedMainMenu()!) :
                 selectedSupportMenu() ? getSupportMenuName(selectedSupportMenu()!) : 'Menu Items' }}
            </span>
          </div>
-        
+
         <!-- Centered Content Area with Icon and Long Dummy Text -->
         <div class="centered-content-area">
           <div class="main-icon">
-            <span>{{ menuItems().icon }}</span>
+            <lucide-angular [name]="menuItems().icon" class="main-icon-svg"></lucide-angular>
           </div>
           <div class="dummy-text-block">
             <p>
-              Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. 
-              Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. 
-              Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. 
+              Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.
+              Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.
+              Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur.
               Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.
             </p>
             <p>
-              Sed ut perspiciatis unde omnis iste natus error sit voluptatem accusantium doloremque laudantium, totam rem aperiam, 
+              Sed ut perspiciatis unde omnis iste natus error sit voluptatem accusantium doloremque laudantium, totam rem aperiam,
               eaque ipsa quae ab illo inventore veritatis et quasi architecto beatae vitae dicta sunt explicabo.
             </p>
             <p>
-              Nemo enim ipsam voluptatem quia voluptas sit aspernatur aut odit aut fugit, sed quia consequuntur magni dolores 
-              eos qui ratione voluptatem sequi nesciunt. Neque porro quisquam est, qui dolorem ipsum quia dolor sit amet, 
+              Nemo enim ipsam voluptatem quia voluptas sit aspernatur aut odit aut fugit, sed quia consequuntur magni dolores
+              eos qui ratione voluptatem sequi nesciunt. Neque porro quisquam est, qui dolorem ipsum quia dolor sit amet,
               consectetur, adipisci velit.
             </p>
           </div>
         </div>
       </div>
-      
+
       <!-- Bottom Fixed Panel for Second Column -->
       <div class="column__footer">
         <div class="footer-context">
+          <lucide-angular name="file-text" class="footer-context-icon"></lucide-angular>
           <span class="footer-context__label">{{ menuItems().title }}</span>
           <span class="footer-context__count">1</span>
         </div>
         <div class="footer-actions">
           <button type="button" class="footer-action-btn" (click)="closeRightPanel()" title="Close panel">
-            ✕
+            <lucide-angular name="x" class="footer-action-icon"></lucide-angular>
           </button>
           <button type="button" class="footer-action-btn" (click)="toggleAppInfo()" title="Info">
-            ℹ️
+            <lucide-angular name="info" class="footer-action-icon"></lucide-angular>
           </button>
         </div>
       </div>
@@ -146,22 +152,27 @@
 
   <!-- Window Layer for WinBox -->
   <div class="window-layer"></div>
-  
+
   <!-- Mobile backdrop for preview panel -->
   <div class="mobile-backdrop" [class.visible]="selectedCard()" (click)="closeRightPanel()"></div>
-  
+
   <!-- App Info Panel -->
   <div class="app-info-panel" [class.visible]="showAppInfo()" (click)="closeAppInfo()">
     <div class="app-info-content" (click)="$event.stopPropagation()">
       <div class="app-info-header">
-        <h3>📱 Zig WebUI Angular Rspack</h3>
-        <button type="button" class="close-btn" (click)="toggleAppInfo()">✕</button>
+        <div class="app-info-title">
+          <lucide-angular name="zap" class="app-info-icon"></lucide-angular>
+          <h3>Zig WebUI Angular Rspack</h3>
+        </div>
+        <button type="button" class="close-btn" (click)="toggleAppInfo()">
+          <lucide-angular name="x" class="close-btn-icon"></lucide-angular>
+        </button>
       </div>
       <div class="app-info-body">
-        <p><strong>Version:</strong> 1.0.0</p>
-        <p><strong>Framework:</strong> Angular 21 + Zig</p>
-        <p><strong>Communication:</strong> WebUI WebSocket Bridge</p>
-        <p><strong>Items:</strong> {{ filteredCards().length }} applications</p>
+        <p><lucide-angular name="tag" class="info-body-icon"></lucide-angular> <strong>Version:</strong> 1.0.0</p>
+        <p><lucide-angular name="layers" class="info-body-icon"></lucide-angular> <strong>Framework:</strong> Angular 21 + Zig</p>
+        <p><lucide-angular name="radio" class="info-body-icon"></lucide-angular> <strong>Communication:</strong> WebUI WebSocket Bridge</p>
+        <p><lucide-angular name="package" class="info-body-icon"></lucide-angular> <strong>Items:</strong> {{ filteredCards().length }} applications</p>
       </div>
     </div>
   </div>
