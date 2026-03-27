@@ -1,0 +1,64 @@
+<div class="svgjs-demo-container">
+  <!-- Left: Demo Controls -->
+  <div class="controls-panel">
+    <h2 class="panel-title">SVG.js Demos</h2>
+    <p class="panel-subtitle">Select a demo to explore SVG.js capabilities</p>
+
+    <!-- Demo Cards Group -->
+    <div class="card-group">
+      <h3 class="group-title">Interactive Demos</h3>
+      <div class="demo-grid">
+        @for (demo of demos; track demo.id) {
+          <div
+            class="demo-card"
+            [class.active]="selectedDemo() === demo.id"
+            (click)="selectDemo(demo.id)">
+            <span class="demo-card-icon">{{ getDemoIcon(demo.id) }}</span>
+            <div class="demo-card-content">
+              <span class="demo-card-name">{{ demo.name }}</span>
+              <span class="demo-card-desc">{{ demo.description }}</span>
+            </div>
+          </div>
+        }
+      </div>
+    </div>
+
+    <!-- Quick Actions Group -->
+    <div class="card-group">
+      <h3 class="group-title">Quick Actions</h3>
+      <div class="action-grid">
+        <button class="action-card" (click)="playAnimation()">
+          <span class="action-icon">▶</span>
+          <span class="action-label">Play</span>
+        </button>
+        <button class="action-card" (click)="pauseAnimation()">
+          <span class="action-icon">⏸</span>
+          <span class="action-label">Pause</span>
+        </button>
+        <button class="action-card" (click)="resetAnimation()">
+          <span class="action-icon">↻</span>
+          <span class="action-label">Reset</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Mobile: Open Canvas Button -->
+    <button class="mobile-open-btn" (click)="openCanvas()">
+      Open Canvas ▶
+    </button>
+  </div>
+
+  <!-- Right: Canvas Area (Sliding Drawer on Mobile) -->
+  <div class="canvas-panel" [class.open]="isCanvasOpen()">
+    <div class="canvas-overlay" (click)="closeCanvas()"></div>
+    <div class="canvas-content">
+      <div class="canvas-header">
+        <h2 class="canvas-title">{{ getCurrentDemoName() }}</h2>
+        <button class="close-canvas-btn" (click)="closeCanvas()" aria-label="Close canvas">×</button>
+      </div>
+      <div class="canvas-wrapper" #canvasContainer>
+        <div id="svg-canvas"></div>
+      </div>
+    </div>
+  </div>
+</div>

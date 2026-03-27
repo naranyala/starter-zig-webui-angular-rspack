@@ -2,7 +2,6 @@ import { Component, computed, signal, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { LoggerService } from '../../core/logger.service';
-import { NotificationService } from '../../core/notification.service';
 import { ApiService } from '../../core/api.service';
 
 interface AuthForm {
@@ -179,7 +178,6 @@ interface AuthForm {
 })
 export class AuthComponent {
   private readonly logger = inject(LoggerService);
-  private readonly notifications = inject(NotificationService);
   readonly apiService = inject(ApiService);
 
   // Mode signal
@@ -253,7 +251,7 @@ export class AuthComponent {
 
   async handleLogin(): Promise<void> {
     if (!this.isLoginValid()) {
-      this.notifications.error('Please fill in all fields');
+      this.logger.warn('Login validation failed');
       return;
     }
 
@@ -265,17 +263,16 @@ export class AuthComponent {
         username: form.username,
         password: form.password,
       }]);
-      this.notifications.success('Login successful');
+      this.logger.info('Login successful');
       this.loginForm.set({ username: '', email: '', password: '' });
     } catch (error) {
       this.logger.error('Login failed', error);
-      this.notifications.error('Login failed. Please check your credentials.');
     }
   }
 
   async handleRegister(): Promise<void> {
     if (!this.isRegisterValid()) {
-      this.notifications.error('Please fix the form errors');
+      this.logger.warn('Register validation failed');
       return;
     }
 
@@ -288,12 +285,11 @@ export class AuthComponent {
         email: form.email,
         password: form.password,
       }]);
-      this.notifications.success('Registration successful');
+      this.logger.info('Registration successful');
       this.registerForm.set({ username: '', email: '', password: '' });
       this.switchToLogin();
     } catch (error) {
       this.logger.error('Registration failed', error);
-      this.notifications.error('Registration failed. Please try again.');
     }
   }
 

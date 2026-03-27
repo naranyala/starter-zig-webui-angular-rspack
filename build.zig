@@ -4,6 +4,26 @@ pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
 
+    // SQLite3 static library - using amalgamated source
+    const sqlite_lib = b.addStaticLibrary(.{
+        .name = "sqlite3",
+        .target = target,
+        .optimize = optimize,
+    });
+    sqlite_lib.addCSourceFile(.{
+        .file = b.path("thirdparty/sqlite3/sqlite3.c"),
+        .flags = &.{
+            "-DSQLITE_THREADSAFE=1",
+            "-DSQLITE_ENABLE_JSON1",
+            "-DSQLITE_ENABLE_FTS5",
+            "-Wno-unused-parameter",
+            "-Wno-missing-field-initializers",
+        },
+    });
+    sqlite_lib.addIncludePath(b.path("thirdparty/sqlite3"));
+    sqlite_lib.linkLibC();
+    sqlite_lib.installHeader(b.path("thirdparty/sqlite3/sqlite3.h"), "sqlite3.h");
+
     // WebUI static library
     const webui_lib = b.addLibrary(.{
         .name = "webui",
@@ -68,6 +88,23 @@ pub fn build(b: *std.Build) void {
     });
     utils_mod.addIncludePath(b.path("thirdparty/webui/include"));
 
+    // SQLite module - Zig bindings
+    const sqlite_mod = b.createModule(.{
+        .root_source_file = b.path("src/db/sqlite.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    sqlite_mod.addIncludePath(b.path("thirdparty/sqlite3"));
+
+    // Database handlers module
+    const db_handlers_mod = b.createModule(.{
+        .root_source_file = b.path("src/handlers/db_handlers.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    db_handlers_mod.addImport("webui", webui_mod);
+    db_handlers_mod.addImport("sqlite", sqlite_mod);
+
     // Main executable module
     const exe_mod = b.createModule(.{
         .root_source_file = b.path("src/main.zig"),
@@ -77,6 +114,8 @@ pub fn build(b: *std.Build) void {
 
     exe_mod.addImport("webui", webui_mod);
     exe_mod.addImport("utils", utils_mod);
+    exe_mod.addImport("sqlite", sqlite_mod);
+    exe_mod.addImport("db_handlers", db_handlers_mod);
 
     const exe = b.addExecutable(.{
         .name = "zig_webui_angular_rspack",
@@ -84,7 +123,9 @@ pub fn build(b: *std.Build) void {
     });
 
     exe.linkLibrary(webui_lib);
+    exe.linkLibrary(sqlite_lib);
     exe.addIncludePath(b.path("thirdparty/webui/include"));
+    exe.addIncludePath(b.path("thirdparty/sqlite3"));
 
     b.installArtifact(exe);
 
@@ -98,7 +139,7 @@ pub fn build(b: *std.Build) void {
     const run_step = b.step("run", "Run the app");
     run_step.dependOn(&run_cmd.step);
 
-    // Test step - tests are embedded in source files via @test decls
+    // Test step
     const test_module = b.createModule(.{
         .root_source_file = b.path("src/main.zig"),
         .target = target,

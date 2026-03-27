@@ -6,13 +6,18 @@ Documentation for the Angular frontend application.
 
 | Document | Description |
 |----------|-------------|
-| [DI_EVALUATION.md](DI_EVALUATION.md) | Dependency Injection system evaluation |
+| [01-DI_EVALUATION.md](01-DI_EVALUATION.md) | Dependency Injection system evaluation |
+| [02-DATA_TRANSFORM_SERVICES.md](02-DATA_TRANSFORM_SERVICES.md) | Data transformation services guide |
+| [03-API_PATTERNS.md](03-API_PATTERNS.md) | API communication patterns |
+| [04-TESTING_GUIDE.md](04-TESTING_GUIDE.md) | Frontend testing guide |
 
 ## Quick Links
 
-- [Main Documentation](../docs/00-README.md) - Complete project documentation
-- [Dependency Injection Guide](../docs/02-DEPENDENCY_INJECTION.md) - DI for both backend and frontend
-- [Services Guide](../docs/05-SERVICES_GUIDE.md) - Frontend services usage
+- [Main Documentation](../docs/README.md) - Complete project documentation
+- [Backend API Reference](../docs/API_REFERENCE.md) - Backend API documentation
+- [Metaprogramming Guide](../docs/METAPROGRAMMING_GUIDE.md) - C3 metaprogramming
+- [Utils Reference](../docs/UTILS_REFERENCE.md) - Backend utilities reference
+- [C Interop Guide](../docs/C_INTEROP_GUIDE.md) - C library integration
 
 ## Frontend Structure
 

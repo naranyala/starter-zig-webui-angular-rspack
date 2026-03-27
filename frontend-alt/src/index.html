@@ -1,0 +1,41 @@
+<!doctype html>
+<head>
+  <meta charset="utf-8">
+  <title>Rust WebUI Application</title>
+  <base href="./">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="icon" type="image/x-icon" href="favicon.ico">
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+    }
+    app-root {
+      display: block;
+      width: 100%;
+      height: 100%;
+    }
+    /* Loading state */
+    app-root:empty::after {
+      content: 'Loading...';
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      font-family: sans-serif;
+      font-size: 18px;
+      color: #666;
+    }
+  </style>
+</head>
+<body>
+  <script>
+    document.body.style.backgroundColor = '#f0f0f0';
+  </script>
+  <div id="angular-error-container"></div>
+  <app-root></app-root>
+</body>
+</html>

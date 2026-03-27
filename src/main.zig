@@ -1,6 +1,8 @@
 const std = @import("std");
 const webui = @import("webui");
 const di = @import("di.zig");
+const sqlite = @import("sqlite");
+const db_handlers = @import("db_handlers");
 
 pub const AppError = error{
     WindowCreationFailed,
@@ -116,7 +118,7 @@ fn setupSignalHandlers() void {
     // Setup signal handlers for graceful shutdown
     const action = std.posix.Sigaction{
         .handler = .{ .handler = handleSignal },
-        .mask = std.posix.sigemptyset(),
+        .mask = std.posix.empty_sigset,
         .flags = 0,
     };
 
@@ -128,20 +130,20 @@ fn setupSignalHandlers() void {
 fn bindBackendFunctions(window: usize) AppError!void {
     const logger_result = di.tryGetLogger();
 
-    const ping_id = webui.bind(window, "ping", handlePing);
-    const getdata_id = webui.bind(window, "getData", handleGetData);
-    const emit_id = webui.bind(window, "emitEvent", handleEmitEvent);
+    // Core functions
+    _ = webui.bind(window, "ping", handlePing);
+    _ = webui.bind(window, "getData", handleGetData);
+    _ = webui.bind(window, "emitEvent", handleEmitEvent);
 
-    if (ping_id == 0 or getdata_id == 0 or emit_id == 0) {
-        const msg = "Failed to bind backend function";
-        switch (logger_result) {
-            .ok => |s| s.err(msg),
-            .err => |_| {},
-        }
-        return AppError.WindowBindingFailed;
-    }
+    // SQLite CRUD functions
+    _ = webui.bind(window, "getUsers", db_handlers.handleSqliteGetUsers);
+    _ = webui.bind(window, "getUserStats", db_handlers.handleSqliteGetUserStats);
+    _ = webui.bind(window, "createUser", db_handlers.handleSqliteCreateUser);
+    _ = webui.bind(window, "deleteUser", db_handlers.handleSqliteDeleteUser);
+    _ = webui.bind(window, "getProducts", db_handlers.handleSqliteGetProducts);
+    _ = webui.bind(window, "getOrders", db_handlers.handleSqliteGetOrders);
 
-    const success_msg = "Backend functions bound: ping, getData, emitEvent";
+    const success_msg = "Backend functions bound: getUsers, getUserStats, createUser, deleteUser, getProducts, getOrders (SQLite)";
     switch (logger_result) {
         .ok => |s| s.info(success_msg),
         .err => |_| {},
@@ -167,10 +169,24 @@ pub fn main() !void {
     std.debug.print("WebUI Version: {s}\n", .{webui.version});
     std.debug.print("Communication: WebUI WebSocket Bridge (NO HTTP/HTTPS)\n", .{});
     std.debug.print("DI System: Angular-style Dependency Injection with Event Bus\n", .{});
+    std.debug.print("Database: SQLite integration enabled\n", .{});
     std.debug.print("\n", .{});
 
     var window: usize = 0;
     errdefer cleanup(window);
+
+    // Initialize SQLite database
+    std.debug.print("[Database] Initializing SQLite...\n", .{});
+    var sqlite_db = sqlite.Database.init(std.heap.page_allocator, "app.db") catch |err| {
+        std.debug.print("[ERROR] Failed to initialize SQLite: {}\n", .{err});
+        return AppError.DiBootstrapFailed;
+    };
+    defer sqlite_db.deinit();
+    
+    try sqlite_db.initTables();
+    try sqlite_db.seedUsers();
+    sqlite.setGlobalDb(&sqlite_db);
+    std.debug.print("[Database] SQLite initialized successfully\n", .{});
 
     std.debug.print("[DI] Bootstrapping dependency injection...\n", .{});
 

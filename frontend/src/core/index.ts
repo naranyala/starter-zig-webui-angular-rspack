@@ -1,13 +1,18 @@
-// Core services - simplified
+// Core Services - Consolidated
+// Essential services for frontend-backend communication
+
+// Communication
+export { CommunicationService } from './communication.service';
 export { ApiService } from './api.service';
-export { LoggerService } from './logger.service';
+
+// Utilities
+export { LoggerService, LogLevel } from './logger.service';
 export { StorageService } from './storage.service';
 export { HttpService } from './http.service';
-export { NotificationService } from './notification.service';
-export { LoadingService } from './loading.service';
+
+// UI Services
 export { ThemeService } from './theme.service';
-export { ClipboardService } from './clipboard.service';
-export { NetworkMonitorService } from './network-monitor.service';
 export { WinBoxService } from './winbox.service';
-export { DevToolsService } from './devtools.service';
-export { CommunicationService } from './communication.service';
+
+// WebUI
+export { WebUIBridgeService } from './webui/webui-bridge.service';

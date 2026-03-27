@@ -148,13 +148,13 @@ pub const EventBus = struct {
         const self = allocator.create(EventBus) catch return DIError.OutOfMemory;
         self.* = .{
             .allocator = allocator,
-            .subscriptions = std.ArrayListAligned(EventSubscription, null){},
+            .subscriptions = std.ArrayListAligned(EventSubscription, null).init(allocator),
         };
         return self;
     }
 
     pub fn deinit(self: *Self) void {
-        self.subscriptions.deinit(self.allocator);
+        self.subscriptions.deinit();
         self.allocator.destroy(self);
     }
 
@@ -211,17 +211,8 @@ pub const EventBus = struct {
     pub fn emit(self: *Self, event: *const Event) void {
         self.mutex.lock();
 
-        var matching_subscriptions = std.ArrayListAligned(*EventSubscription, null){
-            .items = &[_]*EventSubscription{},
-            .capacity = 0,
-        };
-        defer {
-            // Clean up any remaining subscriptions if loop exits early
-            for (matching_subscriptions.items) |sub| {
-                self.allocator.destroy(sub);
-            }
-            matching_subscriptions.deinit(self.allocator);
-        }
+        var matching_subscriptions = std.ArrayListAligned(*EventSubscription, null).init(self.allocator);
+        defer matching_subscriptions.deinit();
 
         // Collect matching subscriptions
         for (self.subscriptions.items) |*sub| {
@@ -232,14 +223,12 @@ pub const EventBus = struct {
                     return;
                 };
                 copy.* = sub.*;
-                if (matching_subscriptions.append(self.allocator, copy)) |_| {
-                    // Success
-                } else |_| {
+                matching_subscriptions.append(copy) catch {
                     // Append failed - clean up the allocated copy
                     self.allocator.destroy(copy);
                     self.mutex.unlock();
                     return;
-                }
+                };
             }
         }
 

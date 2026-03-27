@@ -1,0 +1,238 @@
+import { CommonModule } from '@angular/common';
+import { Component, computed, inject, signal } from '@angular/core';
+import { WinBoxService, type WinBoxInstance } from '../core/winbox.service';
+import { LucideAngularModule } from 'lucide-angular';
+import { provideLucideIcons, Home, Lock, Database, Settings, Folder, Search, X, Menu } from '../core/lucide-icons.provider';
+
+export interface NavItem {
+  id: string;
+  label: string;
+  icon: string;
+}
+
+export interface Card {
+  id: number;
+  title: string;
+  description: string;
+  icon: string;
+  color: string;
+  type: string;
+  date: string;
+  score?: number;
+}
+
+export interface WindowEntry {
+  id: string;
+  title: string;
+  minimized: boolean;
+  focused: boolean;
+}
+
+export type AppView = 'home' | 'auth' | 'sqlite' | 'devtools' | 'settings' | 'help' | 'about';
+
+// Mobile breakpoint
+const MOBILE_BREAKPOINT = 768;
+
+const TECH_CARDS: Card[] = [
+  { id: 1, title: 'Authentication', description: 'Login & Register', icon: 'Lock', color: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', type: 'Feature', date: '2026-03-16' },
+  { id: 2, title: 'SQLite CRUD', description: 'Database Operations', icon: 'Database', color: 'linear-gradient(135deg, #00b09b 0%, #96c93d 100%)', type: 'Feature', date: '2026-03-16' },
+  { id: 3, title: 'DevTools', description: 'Debugging Tools', icon: 'Settings', color: 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)', type: 'Tool', date: '2026-03-15' },
+  { id: 4, title: 'System Info', description: 'System Monitoring', icon: 'BarChart2', color: 'linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)', type: 'Monitor', date: '2026-03-15' },
+  { id: 5, title: 'Network', description: 'Network Stats', icon: 'Globe', color: 'linear-gradient(135deg, #43e97b 0%, #38f9d7 100%)', type: 'Monitor', date: '2026-03-14' },
+  { id: 6, title: 'Processes', description: 'Process Manager', icon: 'Settings', color: 'linear-gradient(135deg, #fa709a 0%, #fee140 100%)', type: 'Tool', date: '2026-03-14' },
+];
+
+@Component({
+  selector: 'app-root',
+  standalone: true,
+  imports: [CommonModule, LucideAngularModule],
+  providers: [...provideLucideIcons()],
+  templateUrl: './app.component.html',
+  styleUrl: './app.component.css',
+})
+export class AppComponent {
+  private readonly winboxService = inject(WinBoxService);
+
+  // UI State
+  readonly activeView = signal<AppView>('home');
+  readonly searchQuery = signal('');
+  readonly sidebarCollapsed = signal(false);
+  readonly isMobile = signal(false);
+
+  // Window management
+  readonly windowEntries = signal<WindowEntry[]>([]);
+  private existingBoxes: WinBoxInstance[] = [];
+
+  // Menu items
+  readonly menus = computed<NavItem[]>(() => [
+    { id: 'home', label: 'Home', icon: 'Home' },
+    { id: 'auth', label: 'Auth', icon: 'Lock' },
+    { id: 'sqlite', label: 'SQLite', icon: 'Database' },
+    { id: 'devtools', label: 'DevTools', icon: 'Settings' },
+    { id: 'settings', label: 'Settings', icon: 'Settings' },
+    { id: 'help', label: 'Help', icon: 'Info' },
+    { id: 'about', label: 'About', icon: 'Info' },
+  ]);
+
+  // Filtered menus based on search
+  readonly filteredMenus = computed<NavItem[]>(() => {
+    const query = this.searchQuery().trim().toLowerCase();
+    if (!query) return this.menus();
+
+    return this.menus()
+      .map(item => ({ item, score: this.fuzzyScore(item.label, query) }))
+      .filter(({ score }) => score > 0)
+      .sort((a, b) => b.score - a.score)
+      .map(({ item }) => item);
+  });
+
+  // Lucide icons
+  readonly icons = { Home, Lock, Database, Settings, Folder, Search, X, Menu };
+
+  getIcon(name: string): any {
+    return this.icons[name as keyof typeof this.icons] || this.icons.Home;
+  }
+
+  private fuzzyScore(text: string, query: string): number {
+    const lowerText = text.toLowerCase();
+    const lowerQuery = query.toLowerCase();
+
+    if (lowerText === lowerQuery) return 100;
+    if (lowerText.startsWith(lowerQuery)) return 80;
+    if (lowerText.includes(lowerQuery)) return 60;
+
+    let score = 0;
+    let queryIndex = 0;
+    for (let i = 0; i < lowerText.length && queryIndex < lowerQuery.length; i++) {
+      if (lowerText[i] === lowerQuery[queryIndex]) {
+        score += 5;
+        queryIndex++;
+      }
+    }
+    return queryIndex === lowerQuery.length ? score : 0;
+  }
+
+  ngOnInit(): void {
+    this.checkMobileView();
+    this.closeAllWindows();
+
+    if (typeof window !== 'undefined') {
+      window.addEventListener('resize', () => this.checkMobileView());
+    }
+  }
+
+  ngOnDestroy(): void {
+    if (typeof window !== 'undefined') {
+      window.removeEventListener('resize', () => this.checkMobileView());
+    }
+  }
+
+  checkMobileView(): void {
+    if (typeof window !== 'undefined') {
+      this.isMobile.set(window.innerWidth <= MOBILE_BREAKPOINT);
+      // Auto-collapse sidebar on mobile
+      if (this.isMobile()) {
+        this.sidebarCollapsed.set(true);
+      }
+    }
+  }
+
+  setActiveView(id: string): void {
+    this.activeView.set(id as AppView);
+    // Close sidebar on mobile after selection
+    if (this.isMobile()) {
+      this.sidebarCollapsed.set(true);
+    }
+  }
+
+  onSearchChange(event: Event): void {
+    const input = event.target as HTMLInputElement;
+    this.searchQuery.set(input.value);
+  }
+
+  clearSearch(): void {
+    this.searchQuery.set('');
+  }
+
+  toggleSidebar(): void {
+    this.sidebarCollapsed.update(collapsed => !collapsed);
+  }
+
+  // Window management (simplified)
+  closeAllWindows(): void {
+    for (const box of this.existingBoxes) {
+      if (box) {
+        try {
+          if (box.min) box.restore();
+          box.close(true);
+        } catch { /* ignore */ }
+      }
+    }
+    this.existingBoxes = [];
+    this.windowEntries.set([]);
+  }
+
+  openAuthWindow(event?: Event): void {
+    event?.stopPropagation();
+    this.createWindow('auth-window', '🔐 Authentication', 'auth');
+  }
+
+  openSqliteWindow(event?: Event): void {
+    event?.stopPropagation();
+    this.createWindow('sqlite-window', '🗄️ SQLite CRUD', 'sqlite');
+  }
+
+  private createWindow(windowId: string, title: string, type: string): void {
+    const WinBoxConstructor = (window as any).WinBox;
+    if (!WinBoxConstructor) {
+      console.error('WinBox not available');
+      return;
+    }
+
+    const existingBox = this.existingBoxes.find(box => box?.__windowId === windowId);
+    if (existingBox) {
+      if (existingBox.min) existingBox.restore();
+      existingBox.focus();
+      return;
+    }
+
+    try {
+      const box = new WinBoxConstructor({
+        id: windowId,
+        title: title,
+        background: type === 'auth' ? 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' : 'linear-gradient(135deg, #00b09b 0%, #96c93d 100%)',
+        width: '100%',
+        height: '100%',
+        x: 0,
+        y: 0,
+        minwidth: 350,
+        minheight: 400,
+        html: this.getWindowHtml(type),
+      });
+
+      box.__windowId = windowId;
+      this.existingBoxes.push(box);
+
+      box.onclose = () => {
+        const index = this.existingBoxes.indexOf(box);
+        if (index > -1) this.existingBoxes.splice(index, 1);
+        this.windowEntries.update(entries => entries.filter(entry => entry.id !== windowId));
+        return true;
+      };
+
+      setTimeout(() => box.focus(), 10);
+    } catch (error) {
+      console.error('Failed to create window:', error);
+    }
+  }
+
+  private getWindowHtml(type: string): string {
+    if (type === 'auth') {
+      return `<div id="auth-root" style="height: 100%; width: 100%; overflow: auto;"></div>`;
+    }
+    if (type === 'sqlite') {
+      return `<div id="sqlite-root" style="height: 100%; width: 100%; overflow: auto;"></div>`;
+    }
+    return `<div style="padding: 20px; color: white;"><h2>Window</h2><p>Content coming soon...</p></div>`;
+  }
+}

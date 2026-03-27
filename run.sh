@@ -160,6 +160,22 @@ step_build_frontend() {
         FILE_COUNT=$(find "${FRONTEND_DIR}/dist/browser" -type f | wc -l)
         log_success "Frontend built successfully (${FILE_COUNT} files)"
         log_info "Output: ${FRONTEND_DIR}/dist/browser"
+        
+        # Patch index.html to include webui.js for WebUI integration
+        log_step "Patching index.html for WebUI integration..."
+        INDEX_HTML="${FRONTEND_DIR}/dist/browser/index.html"
+        if [ -f "$INDEX_HTML" ]; then
+            # Add webui.js script before closing body tag
+            if grep -q "webui.js" "$INDEX_HTML"; then
+                log_info "webui.js already included in index.html"
+            else
+                # Insert webui.js script tag before </body>
+                sed -i 's|</body>|<script src="/webui.js"></script></body>|g' "$INDEX_HTML"
+                log_success "Added webui.js script to index.html"
+            fi
+        else
+            log_warning "index.html not found at $INDEX_HTML"
+        fi
     else
         log_error "Frontend build output not found"
         exit 1

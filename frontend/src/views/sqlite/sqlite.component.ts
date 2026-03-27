@@ -2,7 +2,6 @@ import { Component, signal, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { LoggerService } from '../../core/logger.service';
-import { NotificationService } from '../../core/notification.service';
 import { ApiService } from '../../core/api.service';
 
 export interface User {
@@ -161,7 +160,6 @@ export interface UserStats {
 })
 export class SqliteCrudComponent {
   private readonly logger = inject(LoggerService);
-  private readonly notifications = inject(NotificationService);
   private readonly api = inject(ApiService);
 
   activeTab = signal<'list' | 'create'>('list');
@@ -213,8 +211,7 @@ export class SqliteCrudComponent {
       this.stats.set(stats);
       this.filterUsers();
     } catch (error) {
-      this.notifications.error('Failed to load users');
-      this.logger.error('Load users error', error);
+      this.logger.error('Failed to load users', error);
     } finally {
       this.isLoading.set(false);
     }
@@ -222,19 +219,18 @@ export class SqliteCrudComponent {
 
   async createUser(): Promise<void> {
     if (!this.newUser().name || !this.newUser().email || !this.newUser().age) {
-      this.notifications.error('Please fill in all fields');
+      this.logger.warn('Create user validation failed');
       return;
     }
 
     this.isLoading.set(true);
     try {
       await this.api.callOrThrow('createUser', [this.newUser()]);
-      this.notifications.success('User created successfully');
+      this.logger.info('User created successfully');
       this.newUser.set({ name: '', email: '', age: 25 });
       this.setActiveTab('list');
     } catch (error) {
-      this.notifications.error('Failed to create user');
-      this.logger.error('Create user error', error);
+      this.logger.error('Failed to create user', error);
     } finally {
       this.isLoading.set(false);
     }
@@ -254,11 +250,10 @@ export class SqliteCrudComponent {
     this.isLoading.set(true);
     try {
       await this.api.callOrThrow('deleteUser', [user.id]);
-      this.notifications.success('User deleted');
+      this.logger.info('User deleted');
       await this.loadUsers();
     } catch (error) {
-      this.notifications.error('Failed to delete user');
-      this.logger.error('Delete user error', error);
+      this.logger.error('Failed to delete user', error);
     } finally {
       this.isLoading.set(false);
     }
