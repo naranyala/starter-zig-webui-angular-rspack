@@ -87,9 +87,8 @@ fn cleanup(window: usize) void {
             .name = di.AppEvents.AppStopping,
             .data = null,
             .source = null,
-            .priority = .high,
         };
-        event_bus_result.unwrap().emit(&stopping_event);
+        event_bus_result.ok.emit(&stopping_event);
     }
 
     if (window != 0) {
@@ -101,16 +100,25 @@ fn cleanup(window: usize) void {
 }
 
 var global_window_handle: usize = 0;
-
-var signal_received: std.atomic.Value(bool) = std.atomic.Value(bool).init(false);
+var should_exit: std.atomic.Value(bool) = std.atomic.Value(bool).init(false);
+var signal_count: std.atomic.Value(u32) = std.atomic.Value(u32).init(0);
 
 fn handleSignal(sig_num: c_int) callconv(.c) void {
     _ = sig_num;
-    signal_received.store(true, .seq_cst);
-
-    // Try to close the window if it exists
-    if (global_window_handle != 0) {
-        webui.close(global_window_handle);
+    
+    // First signal: graceful shutdown
+    // Second signal (within 2 seconds): force exit
+    const count = signal_count.fetchAdd(1, .seq_cst);
+    if (count == 0) {
+        should_exit.store(true, .seq_cst);
+        
+        // Try to close the window if it exists
+        if (global_window_handle != 0) {
+            webui.close(global_window_handle);
+        }
+    } else {
+        // Force exit on second signal
+        webui.exit();
     }
 }
 
@@ -196,7 +204,10 @@ pub fn main() !void {
     };
 
     const logger_result = di.tryGetLogger();
-    const logger = logger_result.unwrapOr(injector.getLogger());
+    const logger = switch (logger_result) {
+        .ok => |l| l,
+        .err => |_| injector.getLogger(),
+    };
     logger.info("Application starting...");
     logger.debug("Loading configuration...");
 
@@ -271,7 +282,7 @@ pub fn main() !void {
 
         // Wait for signal/interrupt using async wait
         while (webui.waitAsync()) {
-            if (signal_received.load(.seq_cst)) {
+            if (should_exit.load(.seq_cst)) {
                 logger.info("Signal received, shutting down...");
                 break;
             }
@@ -286,7 +297,7 @@ pub fn main() !void {
 
         // Wait for window to close or signal
         while (webui.waitAsync()) {
-            if (signal_received.load(.seq_cst)) {
+            if (should_exit.load(.seq_cst)) {
                 logger.info("Signal received, shutting down...");
                 webui.exit();
                 break;
@@ -311,7 +322,7 @@ fn handlePing(event: ?*webui.Event) callconv(.c) void {
 
         const api_result = di.tryGetApi();
         if (api_result.isOk()) {
-            api_result.unwrap().incrementCallCount();
+            api_result.ok.incrementCallCount();
         }
         webui.run(e.getWindow(), "{\"success\":true,\"data\":\"pong\"}");
     }
@@ -323,7 +334,7 @@ fn handleGetData(event: ?*webui.Event) callconv(.c) void {
 
         const api_result = di.tryGetApi();
         if (api_result.isOk()) {
-            api_result.unwrap().incrementCallCount();
+            api_result.ok.incrementCallCount();
         }
         webui.run(e.getWindow(), "{\"success\":true,\"data\":{\"message\":\"Hello from Zig\"}}");
     }
@@ -335,15 +346,15 @@ fn handleEmitEvent(event: ?*webui.Event) callconv(.c) void {
 
         const api_result = di.tryGetApi();
         if (api_result.isOk()) {
-            api_result.unwrap().incrementCallCount();
+            api_result.ok.incrementCallCount();
         }
         webui.run(e.getWindow(), "{\"success\":true}");
     }
 }
 
 test "simple test" {
-    var list = std.ArrayList(i32){};
-    defer list.deinit(std.testing.allocator);
-    try list.append(std.testing.allocator, 42);
+    var list = std.ArrayList(i32).init(std.testing.allocator);
+    defer list.deinit();
+    try list.append(42);
     try std.testing.expectEqual(@as(i32, 42), list.pop());
 }

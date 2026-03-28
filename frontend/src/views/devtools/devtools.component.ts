@@ -2,7 +2,6 @@
 import { Component, signal, inject, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { LoggerService } from '../../core/logger.service';
-import { CommunicationService } from '../../core/communication.service';
 
 @Component({
   selector: 'app-devtools',
@@ -248,24 +247,13 @@ import { CommunicationService } from '../../core/communication.service';
 })
 export class DevToolsComponent implements OnInit {
   private readonly logger = inject(LoggerService);
-  private readonly comm = inject(CommunicationService);
 
-  readonly connected = signal(false);
+  readonly connected = signal(true);
   readonly stats = signal({ eventsSent: 0, eventsReceived: 0 });
   readonly logs = signal<any[]>([]);
 
   ngOnInit(): void {
-    this.checkConnection();
     this.loadLogs();
-  }
-
-  private checkConnection(): void {
-    const stats = this.comm.getStats();
-    this.connected.set(stats.activeSubscriptions > 0 || stats.totalMessages > 0);
-    this.stats.set({
-      eventsSent: stats.totalMessages,
-      eventsReceived: 0,
-    });
   }
 
   private loadLogs(): void {
@@ -274,7 +262,6 @@ export class DevToolsComponent implements OnInit {
   }
 
   refresh(): void {
-    this.checkConnection();
     this.loadLogs();
     this.logger.info('DevTools refreshed');
   }

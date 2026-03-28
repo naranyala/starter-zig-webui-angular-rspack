@@ -1,8 +1,9 @@
 import 'zone.js';
 import '@angular/compiler';
 import './winbox-loader';
-import { ErrorHandler } from '@angular/core';
+import { provideHttpClient } from '@angular/common/http';
 import { bootstrapApplication } from '@angular/platform-browser';
+import { provideMarkdown } from 'ngx-markdown';
 import { AppComponent } from './views/app.component';
 
 const logger = console;
@@ -40,7 +41,10 @@ logger.info('Starting Angular bootstrap');
 
 try {
   bootstrapApplication(AppComponent, {
-    providers: [],
+    providers: [
+      provideHttpClient(),
+      provideMarkdown(),
+    ],
   })
     .then(appRef => {
       logger.info('Angular bootstrap completed successfully');

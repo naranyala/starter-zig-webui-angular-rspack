@@ -1,9 +1,8 @@
 //! Dependency Injection and Event Bus System for Zig
-//! Angular-inspired DI with event-driven architecture
+//! Simplified service locator with basic event pub/sub
 
 const std = @import("std");
 const webui = @import("webui");
-const builtin = @import("std").builtin;
 
 // ============================================================================
 // Error Types
@@ -14,14 +13,11 @@ pub const DIError = error{
     InjectorDestroyed,
     OutOfMemory,
     ServiceInitFailed,
-    AllocatorRequired,
     ServiceNotFound,
-    EventNotFound,
-    EventBusError,
 };
 
 // ============================================================================
-// Result Type - Explicit Error Handling
+// Simple Result Type
 // ============================================================================
 
 pub fn Result(comptime T: type) type {
@@ -38,23 +34,11 @@ pub fn Result(comptime T: type) type {
         }
 
         pub fn isOk(self: *const @This()) bool {
-            return switch (self.*) {
-                .ok => true,
-                .err => false,
-            };
+            return self.* == .ok;
         }
 
         pub fn isErr(self: *const @This()) bool {
-            return !self.isOk();
-        }
-
-        pub fn unwrap(self: *const @This()) T {
-            return switch (self.*) {
-                .ok => |v| v,
-                .err => |e| {
-                    std.debug.panic("unwrap on error: {}\n", .{e});
-                },
-            };
+            return self.* == .err;
         }
 
         pub fn unwrapOr(self: *const @This(), default: T) T {
@@ -62,41 +46,6 @@ pub fn Result(comptime T: type) type {
                 .ok => |v| v,
                 .err => default,
             };
-        }
-
-        pub fn unwrapErr(self: *const @This()) DIError {
-            return switch (self.*) {
-                .ok => |_| DIError.NoProvider,
-                .err => |e| e,
-            };
-        }
-
-        pub fn map(self: *const @This(), comptime U: type, f: fn (T) U) @This() {
-            return switch (self.*) {
-                .ok => |v| .{ .ok = f(v) },
-                .err => |e| .{ .err = e },
-            };
-        }
-
-        pub fn mapErr(self: *const @This(), f: fn (DIError) DIError) @This() {
-            return switch (self.*) {
-                .ok => |v| .{ .ok = v },
-                .err => |e| .{ .err = f(e) },
-            };
-        }
-
-        pub fn flatMap(self: *const @This(), f: fn (T) @This()) @This() {
-            return switch (self.*) {
-                .ok => |v| f(v),
-                .err => |e| .{ .err = e },
-            };
-        }
-
-        pub fn match(self: *const @This(), ok: fn (T) void, err: fn (DIError) void) void {
-            switch (self.*) {
-                .ok => |v| ok(v),
-                .err => |e| err(e),
-            }
         }
     };
 }
@@ -108,37 +57,24 @@ pub const VoidResult = Result(void);
 // Event Bus System
 // ============================================================================
 
-pub const EventPriority = enum(u8) {
-    low = 0,
-    normal = 1,
-    high = 2,
-};
-
 pub const EventCallback = *const fn (event: *const Event) void;
 
 pub const Event = struct {
     name: []const u8,
     data: ?*anyopaque,
     source: ?*anyopaque,
-    priority: EventPriority,
-
-    pub fn bubble(self: *const Event) void {
-        _ = self;
-    }
 };
 
 pub const EventSubscription = struct {
     id: usize,
     event_name: []const u8,
     callback: EventCallback,
-    context: ?*anyopaque,
-    priority: EventPriority,
     once: bool,
 };
 
 pub const EventBus = struct {
     allocator: std.mem.Allocator,
-    subscriptions: std.ArrayListAligned(EventSubscription, null),
+    subscriptions: std.ArrayList(EventSubscription),
     next_id: usize = 0,
     mutex: std.Thread.Mutex = .{},
 
@@ -148,12 +84,15 @@ pub const EventBus = struct {
         const self = allocator.create(EventBus) catch return DIError.OutOfMemory;
         self.* = .{
             .allocator = allocator,
-            .subscriptions = std.ArrayListAligned(EventSubscription, null).init(allocator),
+            .subscriptions = std.ArrayList(EventSubscription).init(allocator),
         };
         return self;
     }
 
     pub fn deinit(self: *Self) void {
+        for (self.subscriptions.items) |sub| {
+            self.allocator.free(sub.event_name);
+        }
         self.subscriptions.deinit();
         self.allocator.destroy(self);
     }
@@ -163,16 +102,14 @@ pub const EventBus = struct {
         event_name: []const u8,
         callback: EventCallback,
     ) DIError!usize {
-        return self.subscribeWithOptions(event_name, callback, null, .normal, false);
+        return self.subscribeOnce(event_name, callback, false);
     }
 
-    pub fn subscribeWithOptions(
+    pub fn subscribeOnce(
         self: *Self,
         event_name: []const u8,
         callback: EventCallback,
-        context: ?*anyopaque,
-        priority: EventPriority,
-        subscribe_once: bool,
+        is_once: bool,
     ) DIError!usize {
         self.mutex.lock();
         defer self.mutex.unlock();
@@ -187,9 +124,7 @@ pub const EventBus = struct {
             .id = id,
             .event_name = name_copy,
             .callback = callback,
-            .context = context,
-            .priority = priority,
-            .once = subscribe_once,
+            .once = is_once,
         });
 
         return id;
@@ -210,55 +145,24 @@ pub const EventBus = struct {
 
     pub fn emit(self: *Self, event: *const Event) void {
         self.mutex.lock();
+        defer self.mutex.unlock();
 
-        var matching_subscriptions = std.ArrayListAligned(*EventSubscription, null).init(self.allocator);
-        defer matching_subscriptions.deinit();
+        var to_remove = std.ArrayList(usize).init(self.allocator);
+        defer to_remove.deinit();
 
-        // Collect matching subscriptions
+        // Call matching subscriptions
         for (self.subscriptions.items) |*sub| {
             if (std.mem.eql(u8, sub.event_name, event.name)) {
-                const copy = self.allocator.create(EventSubscription) catch {
-                    // Allocation failed - unlock and return
-                    self.mutex.unlock();
-                    return;
-                };
-                copy.* = sub.*;
-                matching_subscriptions.append(copy) catch {
-                    // Append failed - clean up the allocated copy
-                    self.allocator.destroy(copy);
-                    self.mutex.unlock();
-                    return;
-                };
+                sub.callback(event);
+                if (sub.once) {
+                    to_remove.append(sub.id) catch return;
+                }
             }
         }
 
-        std.mem.sort(
-            *EventSubscription,
-            matching_subscriptions.items,
-            {},
-            struct {
-                fn lessThan(_: void, a: *EventSubscription, b: *EventSubscription) bool {
-                    return @intFromEnum(a.priority) > @intFromEnum(b.priority);
-                }
-            }.lessThan,
-        );
-
-        self.mutex.unlock();
-
-        for (matching_subscriptions.items) |sub| {
-            sub.callback(event);
-            if (sub.once) {
-                self.mutex.lock();
-                for (self.subscriptions.items, 0..) |s, i| {
-                    if (s.id == sub.id) {
-                        self.allocator.free(self.subscriptions.items[i].event_name);
-                        _ = self.subscriptions.orderedRemove(i);
-                        break;
-                    }
-                }
-                self.mutex.unlock();
-            }
-            self.allocator.destroy(sub);
+        // Remove one-time subscriptions
+        for (to_remove.items) |id| {
+            self.unsubscribe(id);
         }
     }
 
@@ -271,7 +175,7 @@ pub const EventBus = struct {
         event_name: []const u8,
         callback: EventCallback,
     ) DIError!usize {
-        return self.subscribeWithOptions(event_name, callback, null, .normal, true);
+        return self.subscribeOnce(event_name, callback, true);
     }
 
     pub fn removeAllForEvent(self: *Self, event_name: []const u8) void {
@@ -294,37 +198,6 @@ pub const EventBus = struct {
         defer self.mutex.unlock();
         return self.subscriptions.items.len;
     }
-};
-
-// ============================================================================
-// Service Traits/Interfaces
-// ============================================================================
-
-pub const ServiceLifetime = enum {
-    transient,
-    singleton,
-    scoped,
-};
-
-pub const ServiceDescriptor = struct {
-    name: []const u8,
-    lifetime: ServiceLifetime,
-    factory: *const fn (allocator: std.mem.Allocator, injector: *Injector) anyerror!*anyopaque,
-};
-
-pub const ServiceIdentifier = enum {
-    logger,
-    config,
-    window,
-    events,
-    api,
-    event_bus,
-    notification,
-    clipboard,
-    storage,
-    http,
-    process,
-    custom,
 };
 
 // ============================================================================
@@ -1177,7 +1050,6 @@ pub fn emitAppStarted() void {
         .name = AppEvents.AppStarted,
         .data = null,
         .source = null,
-        .priority = .normal,
     };
     bus.emit(&event);
 }
@@ -1188,7 +1060,6 @@ pub fn emitWindowCreated(window_id: usize) void {
         .name = AppEvents.WindowCreated,
         .data = @ptrFromInt(window_id),
         .source = null,
-        .priority = .normal,
     };
     bus.emit(&event);
 }
@@ -1199,7 +1070,6 @@ pub fn emitApiCalled(function_name: []const u8) void {
         .name = AppEvents.ApiCalled,
         .data = @ptrFromInt(@intFromPtr(function_name.ptr)),
         .source = null,
-        .priority = .low,
     };
     bus.emit(&event);
 }
@@ -1260,36 +1130,13 @@ test "DI - EventBus once subscription" {
         fn handler(_: *const Event) void {}
     }.handler;
 
-    const sub_id = try bus.once("once-event", handler);
+    const sub_id = try bus.subscribeOnce("once-event", handler, true);
     try testing.expect(sub_id > 0);
 
-    var event = Event{ .name = "once-event", .data = null, .source = null, .priority = .normal };
+    var event = Event{ .name = "once-event", .data = null, .source = null };
     bus.emit(&event);
 
     try testing.expectEqual(@as(usize, 0), bus.subscriptionCount());
-}
-
-test "DI - EventBus priority ordering" {
-    var bus = try EventBus.init(testing.allocator);
-    defer bus.deinit();
-
-    const handler1 = struct {
-        fn handler(_: *const Event) void {}
-    }.handler;
-
-    const handler2 = struct {
-        fn handler(_: *const Event) void {}
-    }.handler;
-
-    const handler3 = struct {
-        fn handler(_: *const Event) void {}
-    }.handler;
-
-    _ = try bus.subscribeWithOptions("priority-test", handler1, null, .low, false);
-    _ = try bus.subscribeWithOptions("priority-test", handler2, null, .normal, false);
-    _ = try bus.subscribeWithOptions("priority-test", handler3, null, .high, false);
-
-    try testing.expectEqual(@as(usize, 3), bus.subscriptionCount());
 }
 
 test "DI - LoggerService logs messages" {

@@ -1,5 +1,6 @@
 // Modern API service with signals for backend communication
 import { Injectable, signal, computed } from '@angular/core';
+import { DEFAULT_TIMEOUT_MS } from '../app/constants/app.constants';
 
 export interface ApiResponse<T> {
   success: boolean;
@@ -20,7 +21,7 @@ export interface ApiState {
 
 @Injectable({ providedIn: 'root' })
 export class ApiService {
-  private readonly defaultTimeout = 30000;
+  private readonly defaultTimeout = DEFAULT_TIMEOUT_MS;
   
   // Internal state signals
   private readonly loading = signal(false);
