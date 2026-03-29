@@ -3,51 +3,20 @@
 
 const std = @import("std");
 const webui = @import("webui");
+const errors = @import("errors");
 
 // ============================================================================
-// Error Types
+// Error Types (use unified error system)
 // ============================================================================
 
-pub const DIError = error{
-    NoProvider,
-    InjectorDestroyed,
-    OutOfMemory,
-    ServiceInitFailed,
-    ServiceNotFound,
-};
+pub const DIError = errors.DIError;
 
 // ============================================================================
-// Simple Result Type
+// Simple Result Type (using unified errors)
 // ============================================================================
 
 pub fn Result(comptime T: type) type {
-    return union(enum) {
-        ok: T,
-        err: DIError,
-
-        pub fn from(value: T) @This() {
-            return .{ .ok = value };
-        }
-
-        pub fn fromError(err: DIError) @This() {
-            return .{ .err = err };
-        }
-
-        pub fn isOk(self: *const @This()) bool {
-            return self.* == .ok;
-        }
-
-        pub fn isErr(self: *const @This()) bool {
-            return self.* == .err;
-        }
-
-        pub fn unwrapOr(self: *const @This(), default: T) T {
-            return switch (self.*) {
-                .ok => |v| v,
-                .err => default,
-            };
-        }
-    };
+    return errors.Result(T);
 }
 
 // Convenience type for void results
@@ -77,6 +46,7 @@ pub const EventBus = struct {
     subscriptions: std.ArrayList(EventSubscription),
     next_id: usize = 0,
     mutex: std.Thread.Mutex = .{},
+    is_shutting_down: std.atomic.Value(bool) = std.atomic.Value(bool).init(false),
 
     const Self = @This();
 
@@ -85,11 +55,19 @@ pub const EventBus = struct {
         self.* = .{
             .allocator = allocator,
             .subscriptions = std.ArrayList(EventSubscription).init(allocator),
+            .is_shutting_down = std.atomic.Value(bool).init(false),
         };
         return self;
     }
 
     pub fn deinit(self: *Self) void {
+        // Signal shutdown to prevent new subscriptions during cleanup
+        self.is_shutting_down.store(true, .seq_cst);
+        
+        self.mutex.lock();
+        defer self.mutex.unlock();
+        
+        // Free all subscription names
         for (self.subscriptions.items) |sub| {
             self.allocator.free(sub.event_name);
         }
@@ -111,6 +89,11 @@ pub const EventBus = struct {
         callback: EventCallback,
         is_once: bool,
     ) DIError!usize {
+        // Check if shutting down
+        if (self.is_shutting_down.load(.seq_cst)) {
+            return DIError.ServiceInitFailed;
+        }
+        
         self.mutex.lock();
         defer self.mutex.unlock();
 
@@ -144,6 +127,11 @@ pub const EventBus = struct {
     }
 
     pub fn emit(self: *Self, event: *const Event) void {
+        // Check if shutting down - skip emit during shutdown
+        if (self.is_shutting_down.load(.seq_cst)) {
+            return;
+        }
+        
         self.mutex.lock();
         defer self.mutex.unlock();
 
@@ -550,7 +538,9 @@ pub const ClipboardService = struct {
         if (self.last_text) |old| {
             self.allocator.free(old);
         }
-        self.last_text = self.allocator.dupe(u8, text);
+        self.last_text = self.allocator.dupe(u8, text) catch {
+            return DIError.OutOfMemory;
+        };
     }
 
     pub fn getText(self: *ClipboardService) DIError![]const u8 {
@@ -584,7 +574,7 @@ pub const StorageService = struct {
     data: std.StringHashMap([]const u8),
 
     pub fn create(allocator: std.mem.Allocator, app_name: []const u8) DIError!*StorageService {
-        _ = app_name;
+        _ = app_name; // Could be used for namespacing in future implementations
         const self = allocator.create(StorageService) catch return DIError.OutOfMemory;
         self.* = .{
             .allocator = allocator,
@@ -693,7 +683,8 @@ pub const HttpService = struct {
         self.default_timeout_ms = timeout_ms;
     }
 
-    pub fn request(_: *HttpService, method: HttpMethod, url: []const u8, body: ?[]const u8) DIError!HttpResponse {
+    pub fn request(self: *HttpService, method: HttpMethod, url: []const u8, body: ?[]const u8) DIError!HttpResponse {
+        _ = self;
         _ = method;
         _ = url;
         _ = body;
@@ -730,13 +721,15 @@ pub const ProcessService = struct {
         return self;
     }
 
-    pub fn spawn(_: *ProcessService, program: []const u8, args: []const []const u8) DIError!std.process.Child {
+    pub fn spawn(self: *ProcessService, program: []const u8, args: []const []const u8) DIError!std.process.Child {
+        _ = self;
         _ = program;
         _ = args;
         return error.NotImplemented;
     }
 
-    pub fn run(_: *ProcessService, program: []const u8, args: []const []const u8) DIError!std.process.Child.ExecResult {
+    pub fn run(self: *ProcessService, program: []const u8, args: []const []const u8) DIError!std.process.Child.ExecResult {
+        _ = self;
         _ = program;
         return std.process.Child.exec(.{
             .allocator = std.heap.page_allocator,

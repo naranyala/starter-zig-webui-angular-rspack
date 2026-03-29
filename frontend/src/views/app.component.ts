@@ -1,12 +1,13 @@
 import { Component, OnInit } from '@angular/core';
-import { DashboardComponent } from './dashboard/dashboard.component';
+import { CommonModule } from '@angular/common';
+import { RouterOutlet, RouterModule } from '@angular/router';
 
 @Component({
   selector: 'app-root',
   standalone: true,
-  imports: [DashboardComponent],
+  imports: [CommonModule, RouterOutlet, RouterModule],
   template: `
-    <app-dashboard />
+    <router-outlet />
   `,
   styles: [`
     :host {
@@ -20,6 +21,6 @@ import { DashboardComponent } from './dashboard/dashboard.component';
 })
 export class AppComponent implements OnInit {
   ngOnInit(): void {
-    console.log('DuckDB Dashboard Application Initialized');
+    console.log('Application Initialized');
   }
 }

@@ -2,22 +2,13 @@
 //! Provides CRUD operations for the Angular frontend
 
 const std = @import("std");
+const errors = @import("errors");
 const c = @cImport({
     @cInclude("sqlite3.h");
 });
 
-pub const DbError = error{
-    OpenFailed,
-    PrepareFailed,
-    StepFailed,
-    FinalizeFailed,
-    BindFailed,
-    QueryFailed,
-    ConstraintViolation,
-    OutOfMemory,
-    NotFound,
-    NameTooLong,
-};
+// Use unified error types
+pub const DbError = errors.DbError;
 
 pub const Database = struct {
     db: *c.sqlite3,
@@ -26,7 +17,7 @@ pub const Database = struct {
     pub fn init(allocator: std.mem.Allocator, path: []const u8) DbError!Database {
         var db: ?*c.sqlite3 = null;
         const path_c = std.posix.toPosixPath(path) catch return DbError.NameTooLong;
-        
+
         const rc = c.sqlite3_open(path_c[0..path_c.len], &db);
         if (rc != c.SQLITE_OK) {
             return DbError.OpenFailed;
@@ -173,7 +164,7 @@ pub const Database = struct {
             const email_ptr = c.sqlite3_column_text(stmt.?, 2);
             const status_ptr = c.sqlite3_column_text(stmt.?, 4);
             const created_at_ptr = c.sqlite3_column_text(stmt.?, 5);
-            
+
             try users.append(User{
                 .id = c.sqlite3_column_int64(stmt.?, 0),
                 .name = try self.allocator.dupe(u8, std.mem.sliceTo(name_ptr, 0)),
@@ -484,7 +475,7 @@ pub const Database = struct {
     }
 
     pub fn getAllOrders(self: *Database) DbError![]Order {
-        const sql = 
+        const sql =
             \\SELECT o.id, o.user_id, o.product_id, o.quantity, o.total_price, o.status, o.created_at,
             \\       u.name as user_name, p.name as product_name
             \\FROM orders o

@@ -3,7 +3,9 @@ import '@angular/compiler';
 import './winbox-loader';
 import { provideHttpClient } from '@angular/common/http';
 import { bootstrapApplication } from '@angular/platform-browser';
+import { provideRouter } from '@angular/router';
 import { provideMarkdown } from 'ngx-markdown';
+import { APP_ROUTES } from './app.routes';
 import { AppComponent } from './views/app.component';
 
 const logger = console;
@@ -44,6 +46,7 @@ try {
     providers: [
       provideHttpClient(),
       provideMarkdown(),
+      provideRouter(APP_ROUTES),
     ],
   })
     .then(appRef => {

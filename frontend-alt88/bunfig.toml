@@ -1,9 +1,0 @@
-# Bun configuration for Angular + Rspack project
-
-[install]
-# Use Bun's native installer
-prefer-offline = true
-
-[run]
-# Use Bun's JavaScript runtime
-shell = "bun"

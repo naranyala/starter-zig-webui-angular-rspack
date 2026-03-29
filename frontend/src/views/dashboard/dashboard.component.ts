@@ -7,12 +7,15 @@
 import { Component, signal, inject, OnInit, ViewChild, ElementRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { HttpClient } from '@angular/common/http';
+import { Router } from '@angular/router';
 import { MarkdownModule } from 'ngx-markdown';
 import { LoggerService } from '../../core/logger.service';
 import { ApiService } from '../../core/api.service';
 import { DuckdbUsersComponent } from '../duckdb/duckdb-users.component';
 import { DuckdbProductsComponent } from '../duckdb/duckdb-products.component';
 import { DuckdbOrdersComponent } from '../duckdb/duckdb-orders.component';
+import { DemoSqliteCrudComponent } from '../demo/demo-sqlite-crud.component';
+import { DemoDuckdbCrudComponent } from '../demo/demo-duckdb-crud.component';
 
 export interface DashboardStats {
   totalUsers: number;
@@ -39,6 +42,8 @@ export interface NavItem {
     DuckdbUsersComponent,
     DuckdbProductsComponent,
     DuckdbOrdersComponent,
+    DemoSqliteCrudComponent,
+    DemoDuckdbCrudComponent,
   ],
   template: `
     <div class="dashboard-container">
@@ -99,16 +104,20 @@ export interface NavItem {
 
         <!-- Content Area -->
         <div class="content-area" #contentArea>
-          @if (activeView() === 'demo_duckdb') {
+          @if (activeView() === 'demo_sqlite_crud') {
+            <app-demo-sqlite-crud />
+          } @else if (activeView() === 'demo_duckdb_crud') {
+            <app-demo-duckdb-crud />
+          } @else if (activeView() === 'demo_duckdb') {
             <app-duckdb-users [items]="users()" (statsChange)="onStatsUpdate($any($event))"></app-duckdb-users>
           } @else if (activeView() === 'demo_sqlite') {
             <app-duckdb-products [items]="products()" (statsChange)="onStatsUpdate($any($event))"></app-duckdb-products>
           } @else if (activeView() === 'demo_websocket') {
             <app-duckdb-orders [items]="orders()" (statsChange)="onStatsUpdate($any($event))"></app-duckdb-orders>
           } @else {
-            <markdown 
-              [src]="currentMarkdownPath()" 
-              (load)="onMarkdownLoad($event)" 
+            <markdown
+              [src]="currentMarkdownPath()"
+              (load)="onMarkdownLoad($event)"
               (error)="onMarkdownError($event)">
             </markdown>
           }
@@ -590,6 +599,7 @@ export class DashboardComponent implements OnInit {
   private readonly logger = inject(LoggerService);
   private readonly http = inject(HttpClient);
   private readonly api = inject(ApiService);
+  private readonly router = inject(Router);
 
   @ViewChild('contentArea') contentArea!: ElementRef<HTMLElement>;
 
@@ -606,7 +616,8 @@ export class DashboardComponent implements OnInit {
   demoOpen = signal(true);
 
   docItems = signal<NavItem[]>([
-    { id: 'README', label: 'Overview', icon: '📖', active: true },
+    { id: 'docs_home', label: '📚 All Docs', icon: '📚', active: true },
+    { id: 'README', label: 'Overview', icon: '📖', active: false },
     { id: 'IMPLEMENTATION_SUMMARY', label: 'Implementation', icon: '📋', active: false },
     { id: 'REFACTORING_SUMMARY', label: 'Refactoring', icon: '♻️', active: false },
     { id: 'TESTING', label: 'Testing', icon: '🧪', active: false },
@@ -621,12 +632,12 @@ export class DashboardComponent implements OnInit {
   ]);
 
   demoItems = signal<NavItem[]>([
+    { id: 'demo_sqlite_crud', label: 'SQLite CRUD', icon: '🗄️', active: false },
+    { id: 'demo_duckdb_crud', label: 'DuckDB CRUD', icon: '🦆', active: false },
     { id: 'demo_duckdb', label: 'DuckDB', icon: '🦆', active: false },
     { id: 'demo_sqlite', label: 'SQLite', icon: '🗃️', active: false },
     { id: 'demo_websocket', label: 'WebSocket', icon: '🔌', active: false },
     { id: 'demo_chart', label: 'Charts', icon: '📊', active: false },
-    { id: 'demo_pdf', label: 'PDF Viewer', icon: '📄', active: false },
-    { id: 'demo_maps', label: 'Maps', icon: '🗺️', active: false },
   ]);
 
   currentPageTitle = signal('Overview');
@@ -706,6 +717,10 @@ export class DashboardComponent implements OnInit {
   }
 
   onNavClick(viewId: string): void {
+    if (viewId === 'docs_home') {
+      this.router.navigate(['/docs']);
+      return;
+    }
     this.setActiveView(viewId);
   }
 

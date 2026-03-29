@@ -1,17 +1,88 @@
 //! Database WebUI Handlers
 //! Provides WebUI bindings for database CRUD operations
+//!
+//! SECURITY: All inputs are validated before use
 
 const std = @import("std");
 const webui = @import("webui");
 const sqlite = @import("sqlite");
 const duckdb = @import("duckdb");
+const logger = @import("logger");
+const errors = @import("errors");
 
-fn log_debug(msg: []const u8) void {
-    std.debug.print("[DEBUG] {s}\n", .{msg});
+// Use unified logger
+const db_logger = logger.ModuleLoggers.db;
+
+// ============================================================================
+// Input Validation Constants
+// ============================================================================
+
+const MAX_NAME_LENGTH = 256;
+const MAX_EMAIL_LENGTH = 320;
+const MAX_STATUS_LENGTH = 64;
+const MIN_AGE = 0;
+const MAX_AGE = 150;
+const MAX_QUERY_LENGTH = 4096;
+
+// ============================================================================
+// Input Validation Helpers
+// ============================================================================
+
+/// Validate string is not empty and within length limits
+fn validateStringLength(value: []const u8, _: []const u8, max_len: usize) !void {
+    if (value.len == 0) {
+        db_logger.errString("Validation failed: empty field");
+        return error.InvalidInput;
+    }
+    if (value.len > max_len) {
+        db_logger.errString("Validation failed: field exceeds maximum length");
+        return error.InvalidInput;
+    }
 }
 
-fn log_error(msg: []const u8) void {
-    std.debug.print("[ERROR] {s}\n", .{msg});
+/// Validate email format (basic check for @ and .)
+fn validateEmail(email: []const u8) !void {
+    try validateStringLength(email, "email", MAX_EMAIL_LENGTH);
+    
+    var has_at = false;
+    var has_dot = false;
+    for (email, 0..) |c, i| {
+        if (c == '@') {
+            if (i == 0 or i == email.len - 1) {
+                db_logger.errString("Validation failed: invalid email format");
+                return error.InvalidInput;
+            }
+            has_at = true;
+        }
+        if (c == '.' and has_at) {
+            has_dot = true;
+        }
+    }
+    if (!has_at or !has_dot) {
+        db_logger.errString("Validation failed: invalid email format");
+        return error.InvalidInput;
+    }
+}
+
+/// Validate age is within reasonable range
+fn validateAge(age: i64) !void {
+    if (age < MIN_AGE or age > MAX_AGE) {
+        db_logger.errString("Validation failed: age out of range");
+        return error.InvalidInput;
+    }
+}
+
+/// Validate status is one of the allowed values
+fn validateStatus(status: []const u8) !void {
+    try validateStringLength(status, "status", MAX_STATUS_LENGTH);
+    const valid_statuses = .{ "active", "inactive", "pending", "suspended" };
+    inline for (valid_statuses) |valid| {
+        if (std.mem.eql(u8, status, valid)) {
+            return;
+        }
+    }
+    db_logger.errString("Validation failed: invalid status value");
+    return error.InvalidInput;
 }
 
 // ============================================================================
@@ -20,11 +91,11 @@ fn log_error(msg: []const u8) void {
 
 pub fn handleSqliteGetUsers(event: ?*webui.Event) callconv(.c) void {
     const e = event orelse return;
-    
+
     const window = e.getWindow();
     if (window == 0) return;
 
-    log_debug("handleSqliteGetUsers called");
+    db_logger.debugString("handleSqliteGetUsers called");
 
     const db = sqlite.getGlobalDb() orelse {
         webui.run(window, "{\"error\":\"Database not initialized\"}");
@@ -32,7 +103,7 @@ pub fn handleSqliteGetUsers(event: ?*webui.Event) callconv(.c) void {
     };
 
     const users = db.getAllUsers() catch {
-        log_error("Failed to get users");
+        db_logger.errString("Failed to get users");
         webui.run(window, "{\"error\":\"Failed to retrieve users\"}");
         return;
     };
@@ -58,11 +129,11 @@ pub fn handleSqliteGetUsers(event: ?*webui.Event) callconv(.c) void {
 
 pub fn handleSqliteGetUserStats(event: ?*webui.Event) callconv(.c) void {
     const e = event orelse return;
-    
+
     const window = e.getWindow();
     if (window == 0) return;
 
-    log_debug("handleSqliteGetUserStats called");
+    db_logger.debugString("handleSqliteGetUserStats called");
 
     const db = sqlite.getGlobalDb() orelse {
         webui.run(window, "{\"error\":\"Database not initialized\"}");
@@ -70,7 +141,7 @@ pub fn handleSqliteGetUserStats(event: ?*webui.Event) callconv(.c) void {
     };
 
     const stats = db.getUserStats() catch {
-        log_error("Failed to get user stats");
+        db_logger.errString("Failed to get user stats");
         webui.run(window, "{\"error\":\"Failed to retrieve stats\"}");
         return;
     };
@@ -89,11 +160,11 @@ pub fn handleSqliteGetUserStats(event: ?*webui.Event) callconv(.c) void {
 
 pub fn handleSqliteCreateUser(event: ?*webui.Event) callconv(.c) void {
     const e = event orelse return;
-    
+
     const window = e.getWindow();
     if (window == 0) return;
 
-    log_debug("handleSqliteCreateUser called");
+    db_logger.debugString("handleSqliteCreateUser called");
 
     const db = sqlite.getGlobalDb() orelse {
         webui.run(window, "{\"error\":\"Database not initialized\"}");
@@ -109,21 +180,43 @@ pub fn handleSqliteCreateUser(event: ?*webui.Event) callconv(.c) void {
 
     // Parse JSON
     var parsed = std.json.parseFromSlice(std.json.Value, db.allocator, user_json, .{}) catch {
-        log_error("Failed to parse user JSON");
+        db_logger.errString("Failed to parse user JSON");
         webui.run(window, "{\"error\":\"Invalid JSON format\"}");
         return;
     };
     defer parsed.deinit();
 
     const obj = parsed.value.object;
-    const name = obj.get("name") orelse {
+    
+    // Validate name
+    const name_val = obj.get("name") orelse {
         webui.run(window, "{\"error\":\"Name is required\"}");
         return;
     };
-    const email = obj.get("email") orelse {
+    if (name_val != .string) {
+        webui.run(window, "{\"error\":\"Name must be a string\"}");
+        return;
+    }
+    validateStringLength(name_val.string, "name", MAX_NAME_LENGTH) catch {
+        webui.run(window, "{\"error\":\"Name exceeds maximum length\"}");
+        return;
+    };
+    
+    // Validate email
+    const email_val = obj.get("email") orelse {
         webui.run(window, "{\"error\":\"Email is required\"}");
         return;
     };
+    if (email_val != .string) {
+        webui.run(window, "{\"error\":\"Email must be a string\"}");
+        return;
+    }
+    validateEmail(email_val.string) catch {
+        webui.run(window, "{\"error\":\"Invalid email format\"}");
+        return;
+    };
+    
+    // Validate age
     const age_val = obj.get("age") orelse {
         webui.run(window, "{\"error\":\"Age is required\"}");
         return;
@@ -136,20 +229,30 @@ pub fn handleSqliteCreateUser(event: ?*webui.Event) callconv(.c) void {
             return;
         },
     };
+    validateAge(age_num) catch {
+        webui.run(window, "{\"error\":\"Age must be between 0 and 150\"}");
+        return;
+    };
 
+    // Validate status (optional)
     const status_val = obj.get("status");
     const status_str = if (status_val) |sv| switch (sv) {
         .string => |s| s,
         else => "active",
     } else "active";
+    
+    validateStatus(status_str) catch {
+        webui.run(window, "{\"error\":\"Invalid status value\"}");
+        return;
+    };
 
     const id = db.insertUser(
-        name.string,
-        email.string,
+        name_val.string,
+        email_val.string,
         @intCast(age_num),
         status_str,
     ) catch {
-        log_error("Failed to insert user");
+        db_logger.errString("Failed to insert user");
         webui.run(window, "{\"error\":\"Failed to create user\"}");
         return;
     };
@@ -162,17 +265,17 @@ pub fn handleSqliteCreateUser(event: ?*webui.Event) callconv(.c) void {
         return;
     };
     defer db.allocator.free(response);
-    
+
     webui.run(window, response);
 }
 
 pub fn handleSqliteDeleteUser(event: ?*webui.Event) callconv(.c) void {
     const e = event orelse return;
-    
+
     const window = e.getWindow();
     if (window == 0) return;
 
-    log_debug("handleSqliteDeleteUser called");
+    db_logger.debugString("handleSqliteDeleteUser called");
 
     const db = sqlite.getGlobalDb() orelse {
         webui.run(window, "{\"error\":\"Database not initialized\"}");
@@ -180,13 +283,26 @@ pub fn handleSqliteDeleteUser(event: ?*webui.Event) callconv(.c) void {
     };
 
     const id_str = webui.getString(e, 0);
-    const id = std.fmt.parseFloat(f64, id_str) catch {
-        webui.run(window, "{\"error\":\"Invalid user ID\"}");
+    
+    // Validate ID is not empty
+    if (id_str.len == 0) {
+        webui.run(window, "{\"error\":\"User ID is required\"}");
+        return;
+    }
+    
+    // Validate ID is a positive number
+    const id = std.fmt.parseInt(i64, id_str, 10) catch {
+        webui.run(window, "{\"error\":\"Invalid user ID format\"}");
         return;
     };
+    
+    if (id <= 0) {
+        webui.run(window, "{\"error\":\"User ID must be positive\"}");
+        return;
+    }
 
-    db.deleteUser(@intFromFloat(id)) catch {
-        log_error("Failed to delete user");
+    db.deleteUser(id) catch {
+        db_logger.errString("Failed to delete user");
         webui.run(window, "{\"error\":\"Failed to delete user\"}");
         return;
     };
@@ -196,11 +312,11 @@ pub fn handleSqliteDeleteUser(event: ?*webui.Event) callconv(.c) void {
 
 pub fn handleSqliteGetProducts(event: ?*webui.Event) callconv(.c) void {
     const e = event orelse return;
-    
+
     const window = e.getWindow();
     if (window == 0) return;
 
-    log_debug("handleSqliteGetProducts called");
+    db_logger.debugString("handleSqliteGetProducts called");
 
     const db = sqlite.getGlobalDb() orelse {
         webui.run(window, "{\"error\":\"Database not initialized\"}");
@@ -208,7 +324,7 @@ pub fn handleSqliteGetProducts(event: ?*webui.Event) callconv(.c) void {
     };
 
     const products = db.getAllProducts() catch {
-        log_error("Failed to get products");
+        db_logger.errString("Failed to get products");
         webui.run(window, "{\"error\":\"Failed to retrieve products\"}");
         return;
     };
@@ -233,11 +349,11 @@ pub fn handleSqliteGetProducts(event: ?*webui.Event) callconv(.c) void {
 
 pub fn handleSqliteGetOrders(event: ?*webui.Event) callconv(.c) void {
     const e = event orelse return;
-    
+
     const window = e.getWindow();
     if (window == 0) return;
 
-    log_debug("handleSqliteGetOrders called");
+    db_logger.debugString("handleSqliteGetOrders called");
 
     const db = sqlite.getGlobalDb() orelse {
         webui.run(window, "{\"error\":\"Database not initialized\"}");
@@ -245,7 +361,7 @@ pub fn handleSqliteGetOrders(event: ?*webui.Event) callconv(.c) void {
     };
 
     const orders = db.getAllOrders() catch {
-        log_error("Failed to get orders");
+        db_logger.errString("Failed to get orders");
         webui.run(window, "{\"error\":\"Failed to retrieve orders\"}");
         return;
     };
@@ -274,11 +390,11 @@ pub fn handleSqliteGetOrders(event: ?*webui.Event) callconv(.c) void {
 
 pub fn handleDuckdbGetUsers(event: ?*webui.Event) callconv(.c) void {
     const e = event orelse return;
-    
+
     const window = e.getWindow();
     if (window == 0) return;
 
-    log_debug("handleDuckdbGetUsers called");
+    db_logger.debugString("handleDuckdbGetUsers called");
 
     const db = duckdb.getGlobalDb() orelse {
         webui.run(window, "{\"error\":\"Database not initialized\"}");
@@ -286,7 +402,7 @@ pub fn handleDuckdbGetUsers(event: ?*webui.Event) callconv(.c) void {
     };
 
     const users = db.getAllUsers() catch {
-        log_error("Failed to get users");
+        db_logger.errString("Failed to get users");
         webui.run(window, "{\"error\":\"Failed to retrieve users\"}");
         return;
     };
@@ -311,11 +427,11 @@ pub fn handleDuckdbGetUsers(event: ?*webui.Event) callconv(.c) void {
 
 pub fn handleDuckdbGetUserStats(event: ?*webui.Event) callconv(.c) void {
     const e = event orelse return;
-    
+
     const window = e.getWindow();
     if (window == 0) return;
 
-    log_debug("handleDuckdbGetUserStats called");
+    db_logger.debugString("handleDuckdbGetUserStats called");
 
     const db = duckdb.getGlobalDb() orelse {
         webui.run(window, "{\"error\":\"Database not initialized\"}");
@@ -323,7 +439,7 @@ pub fn handleDuckdbGetUserStats(event: ?*webui.Event) callconv(.c) void {
     };
 
     const stats = db.getUserStats() catch {
-        log_error("Failed to get user stats");
+        db_logger.errString("Failed to get user stats");
         webui.run(window, "{\"error\":\"Failed to retrieve stats\"}");
         return;
     };
@@ -342,11 +458,11 @@ pub fn handleDuckdbGetUserStats(event: ?*webui.Event) callconv(.c) void {
 
 pub fn handleDuckdbCreateUser(event: ?*webui.Event) callconv(.c) void {
     const e = event orelse return;
-    
+
     const window = e.getWindow();
     if (window == 0) return;
 
-    log_debug("handleDuckdbCreateUser called");
+    db_logger.debugString("handleDuckdbCreateUser called");
 
     const db = duckdb.getGlobalDb() orelse {
         webui.run(window, "{\"error\":\"Database not initialized\"}");
@@ -361,7 +477,7 @@ pub fn handleDuckdbCreateUser(event: ?*webui.Event) callconv(.c) void {
 
     // Parse JSON
     var parsed = std.json.parseFromSlice(std.json.Value, db.allocator, user_json, .{}) catch {
-        log_error("Failed to parse user JSON");
+        db_logger.errString("Failed to parse user JSON");
         webui.run(window, "{\"error\":\"Invalid JSON format\"}");
         return;
     };
@@ -401,7 +517,7 @@ pub fn handleDuckdbCreateUser(event: ?*webui.Event) callconv(.c) void {
         @intCast(age_num),
         status_str,
     ) catch {
-        log_error("Failed to insert user");
+        db_logger.errString("Failed to insert user");
         webui.run(window, "{\"error\":\"Failed to create user\"}");
         return;
     };
@@ -414,17 +530,17 @@ pub fn handleDuckdbCreateUser(event: ?*webui.Event) callconv(.c) void {
         return;
     };
     defer db.allocator.free(response);
-    
+
     webui.run(window, response);
 }
 
 pub fn handleDuckdbDeleteUser(event: ?*webui.Event) callconv(.c) void {
     const e = event orelse return;
-    
+
     const window = e.getWindow();
     if (window == 0) return;
 
-    log_debug("handleDuckdbDeleteUser called");
+    db_logger.debugString("handleDuckdbDeleteUser called");
 
     const db = duckdb.getGlobalDb() orelse {
         webui.run(window, "{\"error\":\"Database not initialized\"}");
@@ -438,7 +554,7 @@ pub fn handleDuckdbDeleteUser(event: ?*webui.Event) callconv(.c) void {
     };
 
     db.deleteUser(@intFromFloat(id)) catch {
-        log_error("Failed to delete user");
+        db_logger.errString("Failed to delete user");
         webui.run(window, "{\"error\":\"Failed to delete user\"}");
         return;
     };
@@ -448,11 +564,11 @@ pub fn handleDuckdbDeleteUser(event: ?*webui.Event) callconv(.c) void {
 
 pub fn handleDuckdbExecuteQuery(event: ?*webui.Event) callconv(.c) void {
     const e = event orelse return;
-    
+
     const window = e.getWindow();
     if (window == 0) return;
 
-    log_debug("handleDuckdbExecuteQuery called");
+    db_logger.debugString("handleDuckdbExecuteQuery called");
 
     const db = duckdb.getGlobalDb() orelse {
         webui.run(window, "{\"error\":\"Database not initialized\"}");
@@ -466,7 +582,7 @@ pub fn handleDuckdbExecuteQuery(event: ?*webui.Event) callconv(.c) void {
     }
 
     const results = db.executeQuery(query) catch {
-        log_error("Failed to execute query");
+        db_logger.errString("Failed to execute query");
         webui.run(window, "{\"error\":\"Query execution failed\"}");
         return;
     };

@@ -80,6 +80,21 @@ pub fn build(b: *std.Build) void {
     });
     webui_mod.addIncludePath(b.path("thirdparty/webui/include"));
 
+    // Errors module - shared across all modules
+    const errors_mod = b.createModule(.{
+        .root_source_file = b.path("src/errors.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+
+    // Logger module - shared across all modules
+    const logger_mod = b.createModule(.{
+        .root_source_file = b.path("src/logger.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    logger_mod.addImport("errors", errors_mod);
+
     // Utilities module
     const utils_mod = b.createModule(.{
         .root_source_file = b.path("src/utils/utils.zig"),
@@ -87,6 +102,7 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
     });
     utils_mod.addIncludePath(b.path("thirdparty/webui/include"));
+    utils_mod.addImport("errors", errors_mod);
 
     // SQLite module - Zig bindings
     const sqlite_mod = b.createModule(.{
@@ -95,6 +111,7 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
     });
     sqlite_mod.addIncludePath(b.path("thirdparty/sqlite3"));
+    sqlite_mod.addImport("errors", errors_mod);
 
     // Database handlers module
     const db_handlers_mod = b.createModule(.{
@@ -104,6 +121,17 @@ pub fn build(b: *std.Build) void {
     });
     db_handlers_mod.addImport("webui", webui_mod);
     db_handlers_mod.addImport("sqlite", sqlite_mod);
+    db_handlers_mod.addImport("errors", errors_mod);
+    db_handlers_mod.addImport("logger", logger_mod);
+
+    // DI module
+    const di_mod = b.createModule(.{
+        .root_source_file = b.path("src/di.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    di_mod.addImport("errors", errors_mod);
+    di_mod.addImport("webui", webui_mod);
 
     // Main executable module
     const exe_mod = b.createModule(.{
@@ -116,6 +144,8 @@ pub fn build(b: *std.Build) void {
     exe_mod.addImport("utils", utils_mod);
     exe_mod.addImport("sqlite", sqlite_mod);
     exe_mod.addImport("db_handlers", db_handlers_mod);
+    exe_mod.addImport("di", di_mod);
+    exe_mod.addImport("errors", errors_mod);
 
     const exe = b.addExecutable(.{
         .name = "zig_webui_angular_rspack",

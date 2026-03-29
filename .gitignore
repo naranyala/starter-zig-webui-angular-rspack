@@ -1,10 +1,14 @@
 
+# Zig build artifacts
 .zig-cache
 zig-out/
 
+# Frontend build artifacts
 frontend/node_modules/
 frontend/dist
 frontend/.angular
+
+thirdparty/*
 
 frontend-legacy/node_modules/
 frontend-legacy/dist
@@ -14,6 +18,26 @@ frontend-alt/node_modules/
 frontend-alt/dist
 frontend-alt/.angular
 
+# Node modules (catch-all)
 */node_modules/*
+*/dist/*
+*/.angular/*
 
-thirdparty/*
+# Thirdparty - IGNORE generated/build files, KEEP source files
+# Keep all source code files
+!thirdparty/**/*.c
+!thirdparty/**/*.h
+!thirdparty/**/*.zig
+!thirdparty/**/*.cpp
+!thirdparty/**/*.hpp
+!thirdparty/**/*.m
+!thirdparty/**/*.mm
+# Ignore build artifacts and binaries
+thirdparty/**/build/
+thirdparty/**/*.o
+thirdparty/**/*.a
+thirdparty/**/*.so
+thirdparty/**/*.dylib
+thirdparty/**/*.dll
+thirdparty/**/*.lib
+thirdparty/**/*.exe
