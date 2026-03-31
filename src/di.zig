@@ -54,7 +54,7 @@ pub const EventBus = struct {
         const self = allocator.create(EventBus) catch return DIError.OutOfMemory;
         self.* = .{
             .allocator = allocator,
-            .subscriptions = std.ArrayList(EventSubscription).init(allocator),
+            .subscriptions = std.ArrayList(EventSubscription).initCapacity(allocator, 0) catch unreachable,
             .is_shutting_down = std.atomic.Value(bool).init(false),
         };
         return self;
@@ -63,15 +63,15 @@ pub const EventBus = struct {
     pub fn deinit(self: *Self) void {
         // Signal shutdown to prevent new subscriptions during cleanup
         self.is_shutting_down.store(true, .seq_cst);
-        
+
         self.mutex.lock();
         defer self.mutex.unlock();
-        
+
         // Free all subscription names
         for (self.subscriptions.items) |sub| {
             self.allocator.free(sub.event_name);
         }
-        self.subscriptions.deinit();
+        self.subscriptions.deinit(self.allocator);
         self.allocator.destroy(self);
     }
 
@@ -93,7 +93,7 @@ pub const EventBus = struct {
         if (self.is_shutting_down.load(.seq_cst)) {
             return DIError.ServiceInitFailed;
         }
-        
+
         self.mutex.lock();
         defer self.mutex.unlock();
 
@@ -103,7 +103,7 @@ pub const EventBus = struct {
         const name_copy = try self.allocator.dupe(u8, event_name);
         errdefer self.allocator.free(name_copy);
 
-        try self.subscriptions.append(.{
+        try self.subscriptions.append(self.allocator, .{
             .id = id,
             .event_name = name_copy,
             .callback = callback,
@@ -131,19 +131,19 @@ pub const EventBus = struct {
         if (self.is_shutting_down.load(.seq_cst)) {
             return;
         }
-        
+
         self.mutex.lock();
         defer self.mutex.unlock();
 
-        var to_remove = std.ArrayList(usize).init(self.allocator);
-        defer to_remove.deinit();
+        var to_remove = std.ArrayList(usize).initCapacity(self.allocator, 0) catch unreachable;
+        defer to_remove.deinit(self.allocator);
 
         // Call matching subscriptions
         for (self.subscriptions.items) |*sub| {
             if (std.mem.eql(u8, sub.event_name, event.name)) {
                 sub.callback(event);
                 if (sub.once) {
-                    to_remove.append(sub.id) catch return;
+                    to_remove.append(self.allocator, sub.id) catch return;
                 }
             }
         }

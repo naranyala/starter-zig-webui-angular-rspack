@@ -1,5 +1,6 @@
 // Modern API service with signals for backend communication
 // Supports both WebUI bridge (desktop) and HTTP fallback (web deployment)
+// SECURITY: Includes input validation and function whitelisting
 import { Injectable, signal, computed } from '@angular/core';
 import { DEFAULT_TIMEOUT_MS } from '../app/constants/app.constants';
 
@@ -9,6 +10,7 @@ export interface ApiResponse<T> {
   success: boolean;
   data?: T;
   error?: string;
+  code?: number;
 }
 
 export interface CallOptions {
@@ -25,6 +27,22 @@ export interface ApiState {
   httpAvailable: boolean;
 }
 
+// SECURITY: Whitelist of allowed backend functions
+const ALLOWED_FUNCTIONS = [
+  // User operations
+  'getUsers', 'getUserStats', 'createUser', 'deleteUser', 'updateUser', 'forceDeleteUser',
+  // Product operations
+  'getProducts',
+  // Order operations
+  'getOrders',
+  // DuckDB operations
+  'duckdbGetUsers', 'duckdbCreateUser', 'duckdbDeleteUser', 'duckdbExecuteQuery',
+  // SQLite operations
+  'sqliteExecuteQuery',
+  // Core operations
+  'ping', 'getData', 'emitEvent',
+];
+
 @Injectable({ providedIn: 'root' })
 export class ApiService {
   private readonly defaultTimeout = DEFAULT_TIMEOUT_MS;
@@ -33,21 +51,21 @@ export class ApiService {
   // Communication mode - auto-detect or manual override
   private communicationMode: CommunicationMode = 'auto';
   private httpAvailable = false;
-  
+
   // Internal state signals
   private readonly loading = signal(false);
   private readonly error = signal<string | null>(null);
   private readonly lastCallTime = signal<number | null>(null);
   private readonly callCount = signal(0);
   private readonly mode = signal<CommunicationMode>('auto');
-  
+
   // Public readonly signals
   readonly isLoading = this.loading.asReadonly();
   readonly error$ = this.error.asReadonly();
   readonly lastCallTime$ = this.lastCallTime.asReadonly();
   readonly callCount$ = this.callCount.asReadonly();
   readonly communicationMode$ = this.mode.asReadonly();
-  
+
   // Computed signals
   readonly hasError = computed(() => this.error() !== null);
   readonly isReady = computed(() => !this.loading() && this.error() === null);
@@ -63,9 +81,9 @@ export class ApiService {
    */
   private detectCommunicationMode(): void {
     // Check if WebUI is available (desktop environment)
-    const isWebUIAvailable = typeof window !== 'undefined' && 
+    const isWebUIAvailable = typeof window !== 'undefined' &&
       typeof (window as unknown as Record<string, unknown>)['webui'] !== 'undefined';
-    
+
     if (isWebUIAvailable) {
       this.setMode('webui');
     } else {
@@ -138,18 +156,43 @@ export class ApiService {
     if (options?.forceHttp) {
       return 'http';
     }
-    
+
     if (this.communicationMode === 'auto') {
       return this.httpAvailable ? 'http' : 'webui';
     }
-    
+
     return this.communicationMode;
+  }
+
+  /**
+   * SECURITY: Validate function name against whitelist
+   */
+  private validateFunctionName(functionName: string): void {
+    if (!ALLOWED_FUNCTIONS.includes(functionName)) {
+      const error = `Function not allowed: ${functionName}`;
+      console.error('[ApiService] Security violation:', error);
+      throw new Error(error);
+    }
+  }
+
+  /**
+   * SECURITY: Sanitize error messages from backend
+   */
+  private sanitizeErrorMessage(error: string): string {
+    // Remove potential script tags and HTML
+    return error
+      .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
+      .replace(/<[^>]*>/g, '')
+      .substring(0, 500); // Limit length
   }
 
   /**
    * Call backend function via WebUI bridge (desktop)
    */
   private async callWebUI<T>(functionName: string, args: unknown[], options?: CallOptions): Promise<ApiResponse<T>> {
+    // SECURITY: Validate function name
+    this.validateFunctionName(functionName);
+
     const timeoutMs = options?.timeoutMs ?? this.defaultTimeout;
     const responseEventName = `${functionName}_response`;
 
@@ -157,25 +200,28 @@ export class ApiService {
       const handler = (event: CustomEvent<ApiResponse<T>>) => {
         clearTimeout(timeoutId);
         window.removeEventListener(responseEventName, handler as EventListener);
-        
+
         this.loading.set(false);
         this.lastCallTime.set(Date.now());
-        
+
         if (!event.detail.success) {
-          this.error.set(event.detail.error ?? 'Unknown error');
+          // SECURITY: Sanitize error message
+          const sanitizedError = this.sanitizeErrorMessage(event.detail.error ?? 'Unknown error');
+          this.error.set(sanitizedError);
         }
-        
+
         resolve(event.detail);
       };
 
       const timeoutId = setTimeout(() => {
         window.removeEventListener(responseEventName, handler as EventListener);
         this.loading.set(false);
-        this.error.set(`Request timeout after ${timeoutMs}ms`);
-        
+        const errorMsg = `Request timeout after ${timeoutMs}ms`;
+        this.error.set(errorMsg);
+
         reject({
           success: false,
-          error: `Request timeout after ${timeoutMs}ms`,
+          error: errorMsg,
         });
       }, timeoutMs);
 
@@ -186,11 +232,12 @@ export class ApiService {
           clearTimeout(timeoutId);
           window.removeEventListener(responseEventName, handler as EventListener);
           this.loading.set(false);
-          this.error.set(`Backend function not found: ${functionName}`);
-          
+          const errorMsg = `Backend function not found: ${functionName}`;
+          this.error.set(errorMsg);
+
           reject({
             success: false,
-            error: `Backend function not found: ${functionName}`,
+            error: errorMsg,
           });
           return;
         }
@@ -200,9 +247,9 @@ export class ApiService {
         clearTimeout(timeoutId);
         window.removeEventListener(responseEventName, handler as EventListener);
         this.loading.set(false);
-        const errorMsg = error instanceof Error ? error.message : String(error);
+        const errorMsg = error instanceof Error ? this.sanitizeErrorMessage(error.message) : String(error);
         this.error.set(errorMsg);
-        
+
         reject({
           success: false,
           error: errorMsg,

@@ -111,7 +111,7 @@ fn handleSignal(sig_num: c_int) callconv(.c) void {
 fn setupSignalHandlers() void {
     const action = std.posix.Sigaction{
         .handler = .{ .handler = handleSignal },
-        .mask = std.posix.empty_sigset,
+        .mask = std.mem.zeroes(std.posix.sigset_t),
         .flags = 0,
     };
 
@@ -238,7 +238,13 @@ fn bindBackendFunctions(window: usize) !void {
     _ = webui.bind(window, "getProducts", db_handlers.handleSqliteGetProducts);
     _ = webui.bind(window, "getOrders", db_handlers.handleSqliteGetOrders);
 
-    const success_msg = "Backend functions bound: getUsers, getUserStats, createUser, deleteUser, getProducts, getOrders (SQLite)";
+    // DuckDB functions - temporarily disabled due to static linking issues
+    // _ = webui.bind(window, "duckdbGetUsers", db_handlers.handleDuckdbGetUsers);
+    // _ = webui.bind(window, "duckdbCreateUser", db_handlers.handleDuckdbCreateUser);
+    // _ = webui.bind(window, "duckdbDeleteUser", db_handlers.handleDuckdbDeleteUser);
+    // _ = webui.bind(window, "duckdbExecuteQuery", db_handlers.handleDuckdbExecuteQuery);
+
+    const success_msg = "Backend functions bound: getUsers, getUserStats, createUser, deleteUser, forceDeleteUser, getProducts, getOrders (SQLite)";
     switch (app_logger_result) {
         .ok => |s| s.info(success_msg),
         .err => |_| {},

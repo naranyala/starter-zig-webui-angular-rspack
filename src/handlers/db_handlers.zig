@@ -1,7 +1,7 @@
 //! Database WebUI Handlers
 //! Provides WebUI bindings for database CRUD operations
 //!
-//! SECURITY: All inputs are validated before use
+//! SECURITY: All inputs are validated and sanitized before use
 
 const std = @import("std");
 const webui = @import("webui");
@@ -9,14 +9,12 @@ const sqlite = @import("sqlite");
 const duckdb = @import("duckdb");
 const logger = @import("logger");
 const errors = @import("errors");
+const security = @import("security");
 
 // Use unified logger
 const db_logger = logger.ModuleLoggers.db;
 
-// ============================================================================
-// Input Validation Constants
-// ============================================================================
-
+// Security constants
 const MAX_NAME_LENGTH = 256;
 const MAX_EMAIL_LENGTH = 320;
 const MAX_STATUS_LENGTH = 64;
@@ -25,69 +23,15 @@ const MAX_AGE = 150;
 const MAX_QUERY_LENGTH = 4096;
 
 // ============================================================================
-// Input Validation Helpers
+// JSON Helper (Zig 0.15 compatible)
 // ============================================================================
 
-/// Validate string is not empty and within length limits
-fn validateStringLength(value: []const u8, _: []const u8, max_len: usize) !void {
-    if (value.len == 0) {
-        db_logger.errString("Validation failed: empty field");
-        return error.InvalidInput;
-    }
-    if (value.len > max_len) {
-        db_logger.errString("Validation failed: field exceeds maximum length");
-        return error.InvalidInput;
-    }
+fn jsonStringify(allocator: std.mem.Allocator, data: anytype) ?[]const u8 {
+    var aw = std.io.Writer.Allocating.init(allocator);
+    defer aw.deinit();
+    std.json.Stringify.value(data, .{}, &aw.writer) catch return null;
+    return aw.written();
 }
-
-/// Validate email format (basic check for @ and .)
-fn validateEmail(email: []const u8) !void {
-    try validateStringLength(email, "email", MAX_EMAIL_LENGTH);
-    
-    var has_at = false;
-    var has_dot = false;
-    for (email, 0..) |c, i| {
-        if (c == '@') {
-            if (i == 0 or i == email.len - 1) {
-                db_logger.errString("Validation failed: invalid email format");
-                return error.InvalidInput;
-            }
-            has_at = true;
-        }
-        if (c == '.' and has_at) {
-            has_dot = true;
-        }
-    }
-    if (!has_at or !has_dot) {
-        db_logger.errString("Validation failed: invalid email format");
-        return error.InvalidInput;
-    }
-}
-
-/// Validate age is within reasonable range
-fn validateAge(age: i64) !void {
-    if (age < MIN_AGE or age > MAX_AGE) {
-        db_logger.errString("Validation failed: age out of range");
-        return error.InvalidInput;
-    }
-}
-
-/// Validate status is one of the allowed values
-fn validateStatus(status: []const u8) !void {
-    try validateStringLength(status, "status", MAX_STATUS_LENGTH);
-    const valid_statuses = .{ "active", "inactive", "pending", "suspended" };
-    inline for (valid_statuses) |valid| {
-        if (std.mem.eql(u8, status, valid)) {
-            return;
-        }
-    }
-    db_logger.errString("Validation failed: invalid status value");
-    return error.InvalidInput;
-}
-
-// ============================================================================
-// SQLite Handlers
-// ============================================================================
 
 pub fn handleSqliteGetUsers(event: ?*webui.Event) callconv(.c) void {
     const e = event orelse return;
@@ -114,11 +58,11 @@ pub fn handleSqliteGetUsers(event: ?*webui.Event) callconv(.c) void {
         db.allocator.free(users);
     }
 
-    // Build JSON response using stringifyAlloc
-    const json = std.json.stringifyAlloc(db.allocator, .{
+    // Build JSON response
+    const json = jsonStringify(db.allocator, .{
         .success = true,
         .data = users,
-    }, .{}) catch {
+    }) orelse {
         webui.run(window, "{\"error\":\"JSON serialization failed\"}");
         return;
     };
@@ -146,10 +90,10 @@ pub fn handleSqliteGetUserStats(event: ?*webui.Event) callconv(.c) void {
         return;
     };
 
-    const json = std.json.stringifyAlloc(db.allocator, .{
+    const json = jsonStringify(db.allocator, .{
         .success = true,
         .data = stats,
-    }, .{}) catch {
+    }) orelse {
         webui.run(window, "{\"error\":\"JSON serialization failed\"}");
         return;
     };
@@ -171,23 +115,23 @@ pub fn handleSqliteCreateUser(event: ?*webui.Event) callconv(.c) void {
         return;
     };
 
-    // Get the first argument as JSON string
+    // Get and validate JSON input
     const user_json = webui.getString(e, 0);
     if (user_json.len == 0) {
         webui.run(window, "{\"error\":\"No user data provided\"}");
         return;
     }
 
-    // Parse JSON
+    // Parse JSON with proper cleanup
     var parsed = std.json.parseFromSlice(std.json.Value, db.allocator, user_json, .{}) catch {
         db_logger.errString("Failed to parse user JSON");
         webui.run(window, "{\"error\":\"Invalid JSON format\"}");
         return;
     };
-    defer parsed.deinit();
+    defer parsed.deinit(); // SECURITY: Always free JSON memory
 
     const obj = parsed.value.object;
-    
+
     // Validate name
     const name_val = obj.get("name") orelse {
         webui.run(window, "{\"error\":\"Name is required\"}");
@@ -197,11 +141,18 @@ pub fn handleSqliteCreateUser(event: ?*webui.Event) callconv(.c) void {
         webui.run(window, "{\"error\":\"Name must be a string\"}");
         return;
     }
-    validateStringLength(name_val.string, "name", MAX_NAME_LENGTH) catch {
-        webui.run(window, "{\"error\":\"Name exceeds maximum length\"}");
+
+    // SECURITY: Validate and sanitize name
+    if (!security.isValidName(name_val.string)) {
+        webui.run(window, "{\"error\":\"Invalid name format\"}");
+        return;
+    }
+    const sanitized_name = security.sanitizeInput(db.allocator, name_val.string) catch {
+        webui.run(window, "{\"error\":\"Memory allocation failed\"}");
         return;
     };
-    
+    defer db.allocator.free(sanitized_name); // SECURITY: Free sanitized input
+
     // Validate email
     const email_val = obj.get("email") orelse {
         webui.run(window, "{\"error\":\"Email is required\"}");
@@ -211,11 +162,18 @@ pub fn handleSqliteCreateUser(event: ?*webui.Event) callconv(.c) void {
         webui.run(window, "{\"error\":\"Email must be a string\"}");
         return;
     }
-    validateEmail(email_val.string) catch {
+
+    // SECURITY: Validate and sanitize email
+    if (!security.isValidEmail(email_val.string)) {
         webui.run(window, "{\"error\":\"Invalid email format\"}");
         return;
+    }
+    const sanitized_email = security.sanitizeInput(db.allocator, email_val.string) catch {
+        webui.run(window, "{\"error\":\"Memory allocation failed\"}");
+        return;
     };
-    
+    defer db.allocator.free(sanitized_email);
+
     // Validate age
     const age_val = obj.get("age") orelse {
         webui.run(window, "{\"error\":\"Age is required\"}");
@@ -229,26 +187,30 @@ pub fn handleSqliteCreateUser(event: ?*webui.Event) callconv(.c) void {
             return;
         },
     };
-    validateAge(age_num) catch {
+
+    // SECURITY: Validate age range
+    if (!security.isValidAge(age_num)) {
         webui.run(window, "{\"error\":\"Age must be between 0 and 150\"}");
         return;
-    };
+    }
 
-    // Validate status (optional)
+    // Validate status
     const status_val = obj.get("status");
     const status_str = if (status_val) |sv| switch (sv) {
         .string => |s| s,
         else => "active",
     } else "active";
-    
-    validateStatus(status_str) catch {
+
+    // SECURITY: Validate status whitelist
+    if (!security.isValidStatus(status_str)) {
         webui.run(window, "{\"error\":\"Invalid status value\"}");
         return;
-    };
+    }
 
+    // Create user with sanitized data
     const id = db.insertUser(
-        name_val.string,
-        email_val.string,
+        sanitized_name,
+        sanitized_email,
         @intCast(age_num),
         status_str,
     ) catch {
@@ -257,10 +219,13 @@ pub fn handleSqliteCreateUser(event: ?*webui.Event) callconv(.c) void {
         return;
     };
 
-    const response = std.json.stringifyAlloc(db.allocator, .{
+    // SECURITY: Log successful creation
+    security.logSecurityEvent(db.allocator, "USER_CREATE", "User created successfully");
+
+    const response = jsonStringify(db.allocator, .{
         .success = true,
         .data = .{ .id = id },
-    }, .{}) catch {
+    }) orelse {
         webui.run(window, "{\"error\":\"Response creation failed\"}");
         return;
     };
@@ -282,32 +247,47 @@ pub fn handleSqliteDeleteUser(event: ?*webui.Event) callconv(.c) void {
         return;
     };
 
-    const id_str = webui.getString(e, 0);
-    
-    // Validate ID is not empty
-    if (id_str.len == 0) {
-        webui.run(window, "{\"error\":\"User ID is required\"}");
-        return;
+    const args_json = webui.getString(e, 0);
+
+    // Parse arguments - support both old (string ID) and new (object with options) format
+    var id: i64 = 0;
+    var force_delete = false;
+
+    // Try to parse as JSON object first
+    if (std.json.parseFromSlice(std.json.Value, db.allocator, args_json, .{})) |parsed| {
+        defer parsed.deinit();
+        if (parsed.value.object.get("id")) |id_val| {
+            id = id_val.integer;
+            if (id == 0) {
+                webui.run(window, "{\"error\":\"Invalid user ID format\"}");
+                return;
+            }
+        }
+        if (parsed.value.object.get("force")) |force_val| {
+            force_delete = force_val.bool;
+        }
+    } else |_| {
+        // Fall back to old format (just ID string)
+        id = std.fmt.parseInt(i64, args_json, 10) catch {
+            webui.run(window, "{\"error\":\"Invalid user ID format\"}");
+            return;
+        };
     }
-    
-    // Validate ID is a positive number
-    const id = std.fmt.parseInt(i64, id_str, 10) catch {
-        webui.run(window, "{\"error\":\"Invalid user ID format\"}");
-        return;
-    };
-    
+
+    // Validate ID is positive
     if (id <= 0) {
         webui.run(window, "{\"error\":\"User ID must be positive\"}");
         return;
     }
 
+    // Perform delete
     db.deleteUser(id) catch {
         db_logger.errString("Failed to delete user");
         webui.run(window, "{\"error\":\"Failed to delete user\"}");
         return;
     };
 
-    webui.run(window, "{\"success\":true}");
+    webui.run(window, "{\"success\":true,\"message\":\"User deleted successfully\"}");
 }
 
 pub fn handleSqliteGetProducts(event: ?*webui.Event) callconv(.c) void {
@@ -335,10 +315,10 @@ pub fn handleSqliteGetProducts(event: ?*webui.Event) callconv(.c) void {
         db.allocator.free(products);
     }
 
-    const json = std.json.stringifyAlloc(db.allocator, .{
+    const json = jsonStringify(db.allocator, .{
         .success = true,
         .data = products,
-    }, .{}) catch {
+    }) orelse {
         webui.run(window, "{\"error\":\"JSON serialization failed\"}");
         return;
     };
@@ -372,10 +352,10 @@ pub fn handleSqliteGetOrders(event: ?*webui.Event) callconv(.c) void {
         db.allocator.free(orders);
     }
 
-    const json = std.json.stringifyAlloc(db.allocator, .{
+    const json = jsonStringify(db.allocator, .{
         .success = true,
         .data = orders,
-    }, .{}) catch {
+    }) orelse {
         webui.run(window, "{\"error\":\"JSON serialization failed\"}");
         return;
     };
@@ -413,10 +393,10 @@ pub fn handleDuckdbGetUsers(event: ?*webui.Event) callconv(.c) void {
         db.allocator.free(users);
     }
 
-    const json = std.json.stringifyAlloc(db.allocator, .{
+    const json = jsonStringify(db.allocator, .{
         .success = true,
         .data = users,
-    }, .{}) catch {
+    }) orelse {
         webui.run(window, "{\"error\":\"JSON serialization failed\"}");
         return;
     };
@@ -444,10 +424,10 @@ pub fn handleDuckdbGetUserStats(event: ?*webui.Event) callconv(.c) void {
         return;
     };
 
-    const json = std.json.stringifyAlloc(db.allocator, .{
+    const json = jsonStringify(db.allocator, .{
         .success = true,
         .data = stats,
-    }, .{}) catch {
+    }) orelse {
         webui.run(window, "{\"error\":\"JSON serialization failed\"}");
         return;
     };
@@ -522,10 +502,10 @@ pub fn handleDuckdbCreateUser(event: ?*webui.Event) callconv(.c) void {
         return;
     };
 
-    const response = std.json.stringifyAlloc(db.allocator, .{
+    const response = jsonStringify(db.allocator, .{
         .success = true,
         .data = .{ .id = id },
-    }, .{}) catch {
+    }) orelse {
         webui.run(window, "{\"error\":\"Response creation failed\"}");
         return;
     };
@@ -581,8 +561,25 @@ pub fn handleDuckdbExecuteQuery(event: ?*webui.Event) callconv(.c) void {
         return;
     }
 
+    // SECURITY: Validate query length
+    if (query.len > MAX_QUERY_LENGTH) {
+        webui.run(window, "{\"error\":\"Query too long\"}");
+        return;
+    }
+
+    // SECURITY: Validate query is SELECT only
+    if (!security.isValidSelectQuery(query)) {
+        security.logSecurityEvent(db.allocator, "SQL_INJECTION_ATTEMPT", "Blocked malicious query attempt");
+        webui.run(window, "{\"error\":\"Only SELECT queries are allowed\"}");
+        return;
+    }
+
+    // SECURITY: Log query execution
+    security.logSecurityEvent(db.allocator, "QUERY_EXECUTE", "Executing validated SELECT query");
+
     const results = db.executeQuery(query) catch {
         db_logger.errString("Failed to execute query");
+        // SECURITY: Don't expose internal error details
         webui.run(window, "{\"error\":\"Query execution failed\"}");
         return;
     };
@@ -594,15 +591,15 @@ pub fn handleDuckdbExecuteQuery(event: ?*webui.Event) callconv(.c) void {
     }
 
     // Build JSON array of arrays
-    var json_arr = std.ArrayList(u8).init(db.allocator);
-    defer json_arr.deinit();
+    var json_arr = std.ArrayList(u8).initCapacity(db.allocator, 0) catch unreachable;
+    defer json_arr.deinit(db.allocator);
 
-    json_arr.appendSlice("{\"success\":true,\"data\":[") catch {};
+    json_arr.appendSlice(db.allocator, "{\"success\":true,\"data\":[") catch {};
     for (results, 0..) |row, i| {
-        if (i > 0) json_arr.appendSlice(",") catch {};
-        json_arr.appendSlice(row) catch {};
+        if (i > 0) json_arr.appendSlice(db.allocator, ",") catch {};
+        json_arr.appendSlice(db.allocator, row) catch {};
     }
-    json_arr.appendSlice("]}") catch {};
+    json_arr.appendSlice(db.allocator, "]}") catch {};
 
     webui.run(window, json_arr.items);
 }

@@ -2,6 +2,7 @@ import { Component, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { ActivatedRoute, RouterModule } from '@angular/router';
 import { MarkdownModule } from 'ngx-markdown';
+import { HttpClient } from '@angular/common/http';
 
 interface DocContent {
   title: string;
@@ -28,7 +29,7 @@ interface DocContent {
         <header class="doc-header">
           <div class="doc-icon">{{ docContent.icon }}</div>
           <h1>{{ docContent.title }}</h1>
-          
+
           <div class="doc-meta">
             <span class="meta-item" *ngIf="docContent.lastUpdated">
               📅 Last updated: {{ docContent.lastUpdated }}
@@ -46,8 +47,8 @@ interface DocContent {
         <footer class="doc-footer" *ngIf="docContent.relatedDocs?.length">
           <h3>Related Documentation</h3>
           <div class="related-grid">
-            <a 
-              [routerLink]="link" 
+            <a
+              [routerLink]="link"
               class="related-card"
               *ngFor="let link of docContent.relatedDocs"
             >
@@ -90,7 +91,7 @@ interface DocContent {
     .breadcrumb-link {
       color: #667eea;
       text-decoration: none;
-      
+
       &:hover {
         text-decoration: underline;
       }
@@ -227,7 +228,7 @@ interface DocContent {
       :deep(a) {
         color: #667eea;
         text-decoration: none;
-        
+
         &:hover {
           text-decoration: underline;
         }
@@ -321,286 +322,83 @@ interface DocContent {
 })
 export class DocsViewerComponent implements OnInit {
   docContent: DocContent | null = null;
-
-  private docContents: Record<string, DocContent> = {
-    'overview': {
-      title: 'Project Overview',
-      icon: '📋',
-      lastUpdated: '2026-03-29',
-      readTime: '5 min',
-      content: `
-# Zig WebUI Angular Rspack - Project Overview
-
-A modern desktop application framework combining:
-- **Backend**: Zig with WebUI library for native window management
-- **Frontend**: Angular 21 with Rspack bundler
-- **Communication**: WebSocket-based (NO HTTP/HTTPS) via WebUI bridge
-- **Desktop**: Native Chromium-based window
-
-## Key Technologies
-
-| Component | Technology | Version |
-|-----------|------------|---------|
-| Backend | Zig | 0.14.1+ |
-| Frontend | Angular + Rspack | Angular 21 |
-| Window | WebUI (Chromium) | 2.5.0-beta.4 |
-| Package Manager | Bun | 1.3.10+ |
-| Communication | WebSocket | Native |
-
-## Architecture
-
-\`\`\`
-┌─────────────────────────────────────────────────────────────┐
-│                    Desktop Application                        │
-│                                                              │
-│  ┌─────────────────────┐      ┌─────────────────────────┐ │
-│  │     Frontend        │      │       Backend            │ │
-│  │     (Angular)       │      │       (Zig + WebUI)     │ │
-│  │                     │      │                         │ │
-│  │  WebuiBridgeService│◄────►│  webui.bind()          │ │
-│  │  WebSocketService   │      │  webui.run()           │ │
-│  │  API Service       │  WS  │  DI Container          │ │
-│  └─────────────────────┘      └─────────────────────────┘ │
-│                              │                              │
-│                     WebUI Bridge                           │
-│                   (Native WebSocket)                        │
-└─────────────────────────────────────────────────────────────┘
-\`\`\`
-
-## Quick Links
-
-- [Quick Start](/docs/getting-started/quickstart) - Get running in 5 minutes
-- [Architecture](/docs/getting-started/architecture) - System design
-- [Critical Fixes](/docs/critical-fixes/fixes-summary) - Recent improvements
-`,
-      relatedDocs: ['/docs/getting-started/quickstart', '/docs/backend/architecture']
-    },
-    'quickstart': {
-      title: 'Quick Start Guide',
-      icon: '⚡',
-      lastUpdated: '2026-03-29',
-      readTime: '3 min',
-      content: `
-# Quick Start Guide
-
-Get up and running in 5 minutes!
-
-## Prerequisites
-
-- **Zig** v0.14.1+
-- **Bun** v1.3.10+
-- **Chromium** browser
-
-## Installation
-
-\`\`\`bash
-# Clone the repository
-git clone <repository-url>
-cd starter-zig-webui-angular-rspack
-
-# Install frontend dependencies
-cd frontend
-bun install
-cd ..
-
-# Build and run
-./run-fast.sh dev
-\`\`\`
-
-## Build Commands
-
-| Command | Description | Time |
-|---------|-------------|------|
-| \`./run-fast.sh dev\` | Full debug build | ~25s |
-| \`./run-fast.sh backend-only\` | Backend only (fastest) | ~5s |
-| \`./run-fast.sh watch\` | Watch mode | Auto |
-| \`./run-fast.sh --clean dev\` | Clean build | ~30s |
-
-## Development Workflow
-
-### Backend Development
-\`\`\`bash
-# Fast iteration (skip Angular)
-./run-fast.sh backend-only
-\`\`\`
-
-### Frontend Development
-\`\`\`bash
-# Start dev server with HMR
-cd frontend && bun run dev
-\`\`\`
-
-### Full Stack
-\`\`\`bash
-# Watch both frontend and backend
-./run-fast.sh watch
-\`\`\`
-
-## Project Structure
-
-\`\`\`
-project/
-├── src/                    # Zig backend
-│   ├── main.zig           # Entry point
-│   ├── di.zig             # Dependency injection
-│   ├── handlers/          # WebUI handlers
-│   └── utils/             # Utilities
-│
-├── frontend/src/          # Angular frontend
-│   ├── core/              # Services
-│   ├── views/             # Components
-│   └── app.component.ts   # Main component
-│
-└── docs/                  # Documentation
-\`\`\`
-
-## Next Steps
-
-1. Read the [Architecture](/docs/getting-started/architecture) guide
-2. Check out [Dev Quickstart](/docs/getting-started/dev-quickstart)
-3. Explore the [API Reference](/docs/api-reference/backend-api)
-`,
-      relatedDocs: ['/docs/getting-started/overview', '/docs/developer-experience/dx-summary']
-    },
-    'dev-quickstart': {
-      title: 'Developer Quickstart',
-      icon: '🛠️',
-      lastUpdated: '2026-03-29',
-      readTime: '4 min',
-      content: `
-# Developer Quickstart
-
-Essential commands for daily development.
-
-## Fast Build Commands
-
-\`\`\`bash
-# Backend work (fastest - 5 seconds)
-./run-fast.sh backend-only
-
-# Full stack (25 seconds)
-./run-fast.sh dev
-
-# Watch mode (auto-rebuild)
-./run-fast.sh watch
-
-# Clean build
-./run-fast.sh --clean dev
-\`\`\`
-
-## Build Time Comparison
-
-| Command | Time | Use Case |
-|---------|------|----------|
-| \`./run-fast.sh backend-only\` | ~5s | Backend logic |
-| \`./run-fast.sh dev\` | ~25s | Full changes |
-| \`./run-fast.sh watch\` | <1s | Active coding |
-| \`./run.sh dev\` (old) | ~45s | ❌ Don't use |
-
-## Testing
-
-### Backend Tests
-\`\`\`bash
-# Run all tests
-zig build test
-
-# Run specific test
-zig build test -- --test-filter "test name"
-\`\`\`
-
-### Frontend Tests
-\`\`\`bash
-# Unit tests (fast)
-cd frontend && bun test
-
-# With coverage
-cd frontend && bun test --coverage
-
-# E2E tests
-cd frontend && bun test:e2e
-\`\`\`
-
-## VS Code Setup
-
-### Recommended Extensions
-- Zig (ziglang.vscode-zig)
-- Angular Language Service
-- Biome (biomejs.biome)
-
-### Key Tasks
-\`\`\`json
-{
-  "label": "Run Dev (Backend Only)",
-  "command": "./run-fast.sh backend-only"
-}
-\`\`\`
-
-## Common Issues
-
-### "Frontend not built"
-\`\`\`bash
-./run-fast.sh frontend-only
-\`\`\`
-
-### "Binary not found"
-\`\`\`bash
-./run-fast.sh --clean backend-only
-\`\`\`
-
-### "Zig cache corrupted"
-\`\`\`bash
-rm -rf .zig-cache && zig build
-\`\`\`
-
-## Performance Tips
-
-1. **Use backend-only mode** for backend work
-2. **Enable watch mode** for active development
-3. **Keep dependencies minimal**
-4. **Use build cache** (don't clean unless necessary)
-
-## Metrics
-
-Track your development speed:
-
-\`\`\`bash
-# Time a build
-time ./run-fast.sh dev
-
-# Check bundle size
-ls -lh frontend/dist/browser/*.js
-\`\`\`
-
-**Target Metrics:**
-- Backend build: <5 seconds ✅
-- Frontend build: <20 seconds ✅
-- Hot reload: <1 second ✅
-`,
-      relatedDocs: ['/docs/developer-experience/dx-summary', '/docs/build-system/build-config']
-    }
-  };
+  private currentSectionId = '';
 
   constructor(
-    private route: ActivatedRoute
+    private route: ActivatedRoute,
+    private http: HttpClient
   ) {}
 
   ngOnInit() {
     this.route.params.subscribe(params => {
       const sectionId = params['sectionId'];
-      this.docContent = this.docContents[sectionId] || this.getDocContent(sectionId);
+      this.currentSectionId = sectionId;
+      this.loadDocContent(sectionId);
     });
   }
 
-  private getDocContent(sectionId: string): DocContent {
-    const title = sectionId.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
-    return {
-      title: title,
-      icon: '📄',
-      lastUpdated: '2026-03-29',
-      readTime: '5 min',
-      content: `# ${title.toUpperCase()}\\n\\nDocumentation content coming soon...\\n\\nThis section is under construction. Please check back later.\\n\\n## Related Links\\n\\n- [Getting Started](/docs/getting-started/overview)\\n- [Critical Fixes](/docs/critical-fixes/fixes-summary)\\n- [Developer Experience](/docs/developer-experience/dx-summary)`,
-      relatedDocs: ['/docs/getting-started/overview']
+  private loadDocContent(sectionId: string) {
+    const mdPath = `assets/docs/${sectionId}.md`;
+    
+    this.http.get(mdPath, { responseType: 'text' }).subscribe({
+      next: (content) => {
+        this.docContent = {
+          title: this.extractTitle(content, sectionId),
+          icon: this.extractIcon(sectionId),
+          lastUpdated: '2026-03-31',
+          readTime: '10 min',
+          content: content,
+          relatedDocs: this.getRelatedDocs(sectionId)
+        };
+      },
+      error: (error) => {
+        console.error('Failed to load documentation:', error);
+        this.docContent = {
+          title: 'Documentation Not Found',
+          icon: '❌',
+          lastUpdated: '2026-03-31',
+          readTime: '1 min',
+          content: `# Documentation Not Found\\n\\nThe requested documentation "${sectionId}" could not be loaded.\\n\\n## Available Documentation\\n\\n- [DuckDB CRUD Integration](/docs/duckdb-crud/DUCKDB_CRUD_INTEGRATION)\\n- [SQLite CRUD Integration](/docs/sqlite-crud/SQLITE_CRUD_INTEGRATION)`,
+          relatedDocs: ['/docs/duckdb-crud/DUCKDB_CRUD_INTEGRATION', '/docs/sqlite-crud/SQLITE_CRUD_INTEGRATION']
+        };
+      }
+    });
+  }
+
+  private extractTitle(content: string, sectionId: string): string {
+    const match = content.match(/^# (.+)$/m);
+    return match ? match[1] : sectionId.replace(/-/g, ' ').replace(/\\b\\w/g, l => l.toUpperCase());
+  }
+
+  private extractIcon(sectionId: string): string {
+    const iconMap: Record<string, string> = {
+      'DUCKDB_CRUD_INTEGRATION': '🦆',
+      'SQLITE_CRUD_INTEGRATION': '🗄️',
+      'duckdb-vs-sqlite': '⚖️',
+      'performance-comparison': '📊',
+      'use-cases': '🎯',
+      'security-checklist': '🔒',
+      'error-handling': '⚠️',
+      'testing-guide': '🧪',
+      'troubleshooting': '🔍'
     };
+    return iconMap[sectionId] || '📄';
+  }
+
+  private getRelatedDocs(sectionId: string): string[] {
+    if (sectionId.includes('DUCKDB')) {
+      return ['/docs/sqlite-crud/SQLITE_CRUD_INTEGRATION', '/docs/comparison/duckdb-vs-sqlite'];
+    }
+    if (sectionId.includes('SQLITE')) {
+      return ['/docs/duckdb-crud/DUCKDB_CRUD_INTEGRATION', '/docs/comparison/duckdb-vs-sqlite'];
+    }
+    if (sectionId.includes('comparison')) {
+      return ['/docs/duckdb-crud/DUCKDB_CRUD_INTEGRATION', '/docs/sqlite-crud/SQLITE_CRUD_INTEGRATION'];
+    }
+    if (sectionId.includes('production')) {
+      return ['/docs/duckdb-crud/DUCKDB_CRUD_INTEGRATION', '/docs/sqlite-crud/SQLITE_CRUD_INTEGRATION'];
+    }
+    return [];
   }
 
   scrollToTop() {

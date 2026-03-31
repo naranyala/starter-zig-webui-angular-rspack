@@ -180,8 +180,8 @@ pub const Database = struct {
         defer c.duckdb_destroy_result(&result);
 
         const row_count = c.duckdb_row_count(&result);
-        var users = std.ArrayList(User).init(self.allocator);
-        errdefer users.deinit();
+        var users = std.ArrayList(User).initCapacity(self.allocator, 0) catch unreachable;
+        errdefer users.deinit(self.allocator);
 
         var i: c.idx_t = 0;
         while (i < row_count) : (i += 1) {
@@ -205,7 +205,7 @@ pub const Database = struct {
             defer c.duckdb_free(created_at_ptr);
             const created_at = try self.allocator.dupe(u8, std.mem.sliceTo(created_at_ptr, 0));
 
-            try users.append(User{
+            try users.append(self.allocator, User{
                 .id = id,
                 .name = name,
                 .email = email,
@@ -215,7 +215,7 @@ pub const Database = struct {
             });
         }
 
-        return users.toOwnedSlice();
+        return users.toOwnedSlice(self.allocator);
     }
 
     pub fn getUserStats(self: *Database) DbError!UserStats {
@@ -303,39 +303,39 @@ pub const Database = struct {
         const row_count = c.duckdb_row_count(&result);
         const col_count = c.duckdb_column_count(&result);
 
-        var rows = std.ArrayList([]const u8).init(self.allocator);
+        var rows = std.ArrayList([]const u8).initCapacity(self.allocator, 0) catch unreachable;
         errdefer {
             for (rows.items) |row| {
                 self.allocator.free(row);
             }
-            rows.deinit();
+            rows.deinit(self.allocator);
         }
 
         var i: c.idx_t = 0;
         while (i < row_count) : (i += 1) {
             // Build a JSON array string for this row
-            var row_json = std.ArrayList(u8).init(self.allocator);
-            errdefer row_json.deinit();
+            var row_json = std.ArrayList(u8).initCapacity(self.allocator, 0) catch unreachable;
+            errdefer row_json.deinit(self.allocator);
 
-            try row_json.append('[');
+            try row_json.append(self.allocator, '[');
             var j: c.idx_t = 0;
             while (j < col_count) : (j += 1) {
-                if (j > 0) try row_json.append(',');
+                if (j > 0) try row_json.append(self.allocator, ',');
                 const val_ptr = c.duckdb_value_varchar(&result, j, i);
                 if (val_ptr != null) {
-                    try row_json.append('"');
-                    try row_json.appendSlice(std.mem.sliceTo(val_ptr, 0));
-                    try row_json.append('"');
+                    try row_json.append(self.allocator, '"');
+                    try row_json.appendSlice(self.allocator, std.mem.sliceTo(val_ptr, 0));
+                    try row_json.append(self.allocator, '"');
                     c.duckdb_free(val_ptr);
                 } else {
-                    try row_json.appendSlice("null");
+                    try row_json.appendSlice(self.allocator, "null");
                 }
             }
-            try row_json.append(']');
-            try rows.append(try row_json.toOwnedSlice());
+            try row_json.append(self.allocator, ']');
+            try rows.append(self.allocator, try row_json.toOwnedSlice(self.allocator));
         }
 
-        return rows.toOwnedSlice();
+        return rows.toOwnedSlice(self.allocator);
     }
 
     pub fn seedUsers(self: *Database) DbError!void {

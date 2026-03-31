@@ -156,8 +156,8 @@ pub const Database = struct {
         }
         defer _ = c.sqlite3_finalize(stmt);
 
-        var users = std.ArrayList(User).init(self.allocator);
-        errdefer users.deinit();
+        var users = std.ArrayList(User).initCapacity(self.allocator, 0) catch unreachable;
+        errdefer users.deinit(self.allocator);
 
         while (c.sqlite3_step(stmt.?) == c.SQLITE_ROW) {
             const name_ptr = c.sqlite3_column_text(stmt.?, 1);
@@ -165,7 +165,7 @@ pub const Database = struct {
             const status_ptr = c.sqlite3_column_text(stmt.?, 4);
             const created_at_ptr = c.sqlite3_column_text(stmt.?, 5);
 
-            try users.append(User{
+            try users.append(self.allocator, User{
                 .id = c.sqlite3_column_int64(stmt.?, 0),
                 .name = try self.allocator.dupe(u8, std.mem.sliceTo(name_ptr, 0)),
                 .email = try self.allocator.dupe(u8, std.mem.sliceTo(email_ptr, 0)),
@@ -175,7 +175,7 @@ pub const Database = struct {
             });
         }
 
-        return users.toOwnedSlice();
+        return users.toOwnedSlice(self.allocator);
     }
 
     pub fn updateUser(self: *Database, id: i64, name: []const u8, email: []const u8, age: u32, status: []const u8) DbError!void {
@@ -451,8 +451,8 @@ pub const Database = struct {
         }
         defer _ = c.sqlite3_finalize(stmt);
 
-        var products = std.ArrayList(Product).init(self.allocator);
-        errdefer products.deinit();
+        var products = std.ArrayList(Product).initCapacity(self.allocator, 0) catch unreachable;
+        errdefer products.deinit(self.allocator);
 
         while (c.sqlite3_step(stmt.?) == c.SQLITE_ROW) {
             const name_ptr = c.sqlite3_column_text(stmt.?, 1);
@@ -460,7 +460,7 @@ pub const Database = struct {
             const category_ptr = c.sqlite3_column_text(stmt.?, 5);
             const created_at_ptr = c.sqlite3_column_text(stmt.?, 6);
 
-            try products.append(Product{
+            try products.append(self.allocator, Product{
                 .id = c.sqlite3_column_int64(stmt.?, 0),
                 .name = try self.allocator.dupe(u8, std.mem.sliceTo(name_ptr, 0)),
                 .description = try self.allocator.dupe(u8, std.mem.sliceTo(desc_ptr, 0)),
@@ -471,7 +471,7 @@ pub const Database = struct {
             });
         }
 
-        return products.toOwnedSlice();
+        return products.toOwnedSlice(self.allocator);
     }
 
     pub fn getAllOrders(self: *Database) DbError![]Order {
@@ -492,14 +492,14 @@ pub const Database = struct {
         }
         defer _ = c.sqlite3_finalize(stmt);
 
-        var orders = std.ArrayList(Order).init(self.allocator);
-        errdefer orders.deinit();
+        var orders = std.ArrayList(Order).initCapacity(self.allocator, 0) catch unreachable;
+        errdefer orders.deinit(self.allocator);
 
         while (c.sqlite3_step(stmt.?) == c.SQLITE_ROW) {
             const status_ptr = c.sqlite3_column_text(stmt.?, 5);
             const created_at_ptr = c.sqlite3_column_text(stmt.?, 6);
 
-            try orders.append(Order{
+            try orders.append(self.allocator, Order{
                 .id = c.sqlite3_column_int64(stmt.?, 0),
                 .user_id = c.sqlite3_column_int64(stmt.?, 1),
                 .product_id = c.sqlite3_column_int64(stmt.?, 2),
@@ -510,7 +510,7 @@ pub const Database = struct {
             });
         }
 
-        return orders.toOwnedSlice();
+        return orders.toOwnedSlice(self.allocator);
     }
 };
 

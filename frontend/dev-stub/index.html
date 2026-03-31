@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Backend Dev Mode</title>
+    <style>
+        body { font-family: system-ui; padding: 20px; background: #1a1a2e; color: #eee; }
+        h1 { color: #94a3b8; }
+        .card { background: #16213e; padding: 20px; border-radius: 8px; margin: 10px 0; }
+        button { background: #0f3460; color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer; margin: 5px; }
+        button:hover { background: #1a4a7a; }
+        #output { background: #0f0f23; padding: 15px; border-radius: 4px; font-family: monospace; white-space: pre-wrap; margin-top: 10px; min-height: 200px; }
+        .success { color: #4ade80; }
+        .error { color: #f87171; }
+    </style>
+</head>
+<body>
+    <h1>🔧 Backend Development Mode</h1>
+    
+    <div class="card">
+        <h3>Quick Tests</h3>
+        <button onclick="testPing()">Ping Backend</button>
+        <button onclick="testGetData()">Get Data</button>
+        <button onclick="testGetUsers()">Get Users (SQLite)</button>
+        <button onclick="clearOutput()">Clear</button>
+    </div>
+    
+    <div class="card">
+        <h3>Output</h3>
+        <div id="output">Click a button to test backend functions...</div>
+    </div>
+    
+    <script>
+        const output = document.getElementById('output');
+        
+        function log(message, type = 'info') {
+            const timestamp = new Date().toLocaleTimeString();
+            const className = type === 'error' ? 'error' : type === 'success' ? 'success' : '';
+            output.innerHTML += `\n<span class="${className}">[${timestamp}] ${message}</span>`;
+            output.scrollTop = output.scrollHeight;
+        }
+        
+        function clearOutput() {
+            output.innerHTML = 'Output cleared';
+        }
+        
+        async function testPing() {
+            try {
+                log('Calling ping()...');
+                const result = await window.ping();
+                log('Ping response: ' + JSON.stringify(result), 'success');
+            } catch (err) {
+                log('Ping failed: ' + err.message, 'error');
+            }
+        }
+        
+        async function testGetData() {
+            try {
+                log('Calling getData()...');
+                const result = await window.getData();
+                log('GetData response: ' + JSON.stringify(result), 'success');
+            } catch (err) {
+                log('GetData failed: ' + err.message, 'error');
+            }
+        }
+        
+        async function testGetUsers() {
+            try {
+                log('Calling getUsers()...');
+                const result = await window.getUsers();
+                log('GetUsers response: ' + JSON.stringify(result, null, 2), 'success');
+            } catch (err) {
+                log('GetUsers failed: ' + err.message, 'error');
+            }
+        }
+        
+        // Auto-detect WebUI availability
+        window.addEventListener('DOMContentLoaded', () => {
+            if (typeof window.webui !== 'undefined') {
+                log('✓ WebUI bridge available', 'success');
+            } else {
+                log('⚠ WebUI bridge not detected - backend may not be ready', 'error');
+            }
+        });
+    </script>
+</body>
+</html>

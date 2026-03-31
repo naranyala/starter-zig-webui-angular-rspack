@@ -5,10 +5,13 @@ pub fn build(b: *std.Build) void {
     const optimize = b.standardOptimizeOption(.{});
 
     // SQLite3 static library - using amalgamated source
-    const sqlite_lib = b.addStaticLibrary(.{
+    const sqlite_lib = b.addLibrary(.{
         .name = "sqlite3",
-        .target = target,
-        .optimize = optimize,
+        .linkage = .static,
+        .root_module = b.createModule(.{
+            .target = target,
+            .optimize = optimize,
+        }),
     });
     sqlite_lib.addCSourceFile(.{
         .file = b.path("thirdparty/sqlite3/sqlite3.c"),
@@ -113,6 +116,48 @@ pub fn build(b: *std.Build) void {
     sqlite_mod.addIncludePath(b.path("thirdparty/sqlite3"));
     sqlite_mod.addImport("errors", errors_mod);
 
+    // DuckDB module - Zig bindings
+    const duckdb_mod = b.createModule(.{
+        .root_source_file = b.path("src/db/duckdb.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    duckdb_mod.addIncludePath(b.path("thirdparty/duckdb"));
+    duckdb_mod.addImport("errors", errors_mod);
+
+    // Security module
+    const security_mod = b.createModule(.{
+        .root_source_file = b.path("src/utils/security.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    security_mod.addImport("errors", errors_mod);
+
+    // Repository module
+    const repository_mod = b.createModule(.{
+        .root_source_file = b.path("src/repositories/repository.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    repository_mod.addImport("errors", errors_mod);
+
+    // User repository module
+    const user_repo_mod = b.createModule(.{
+        .root_source_file = b.path("src/repositories/user_repository.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    user_repo_mod.addImport("errors", errors_mod);
+    user_repo_mod.addImport("sqlite", sqlite_mod);
+
+    // User service module
+    const user_service_mod = b.createModule(.{
+        .root_source_file = b.path("src/services/user_service.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    user_service_mod.addImport("errors", errors_mod);
+
     // Database handlers module
     const db_handlers_mod = b.createModule(.{
         .root_source_file = b.path("src/handlers/db_handlers.zig"),
@@ -121,8 +166,11 @@ pub fn build(b: *std.Build) void {
     });
     db_handlers_mod.addImport("webui", webui_mod);
     db_handlers_mod.addImport("sqlite", sqlite_mod);
+    db_handlers_mod.addImport("duckdb", duckdb_mod);
     db_handlers_mod.addImport("errors", errors_mod);
     db_handlers_mod.addImport("logger", logger_mod);
+    db_handlers_mod.addImport("user_service", user_service_mod);
+    db_handlers_mod.addImport("security", security_mod);
 
     // DI module
     const di_mod = b.createModule(.{
@@ -146,6 +194,7 @@ pub fn build(b: *std.Build) void {
     exe_mod.addImport("db_handlers", db_handlers_mod);
     exe_mod.addImport("di", di_mod);
     exe_mod.addImport("errors", errors_mod);
+    exe_mod.addImport("user_service", user_service_mod);
 
     const exe = b.addExecutable(.{
         .name = "zig_webui_angular_rspack",
@@ -156,6 +205,14 @@ pub fn build(b: *std.Build) void {
     exe.linkLibrary(sqlite_lib);
     exe.addIncludePath(b.path("thirdparty/webui/include"));
     exe.addIncludePath(b.path("thirdparty/sqlite3"));
+    // DuckDB is disabled due to static linking issues with C++ standard library
+    // exe.addIncludePath(b.path("thirdparty/duckdb"));
+    // exe.addObjectFile(b.path("thirdparty/static-duckdb-libs-linux-amd64/libduckdb_static.a"));
+    // exe.linkSystemLibrary("pthread");
+    // exe.linkSystemLibrary("dl");
+    // exe.linkLibC();
+    // exe.linkLibCpp();
+    // exe.linkSystemLibrary("stdc++");
 
     b.installArtifact(exe);
 
